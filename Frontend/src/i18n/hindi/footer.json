@@ -1,0 +1,25 @@
+{
+  "links": {
+    "websitePolicies": "वेबसाइट नीतियां",
+    "aboutUs": "हमारे बारे में",
+    "suggestions": "पोर्टल हेतु सुझाव",
+    "contactUs": "संपर्क करें",
+    "faq": "FAQ"
+  },
+  "contact": {
+    "queryText": "For any query regarding this website, Please contact the \"Web Information Manager\"",
+    "contactPerson": "Shri Arvind Mohan, Joint Secretary (Chief Minister Office, Lucknow, Uttar Pradesh),",
+    "emailLabel": "Email ID:"
+  },
+  "copyright": {
+    "lastUpdated": "Last Updated:",
+    "vishnu": "Vishnu-6",
+    "content": "© Content owned, updated by the Lok Shikayat Vibhag, Chief Minister Office Uttar Pradesh Government. Website is designed, developed, maintained and hosted by National Informatics Centre, Uttar Pradesh"
+  },
+  "social": {
+    "facebook": "Facebook",
+    "twitter": "Twitter",
+    "youtube": "YouTube"
+  }
+}
+

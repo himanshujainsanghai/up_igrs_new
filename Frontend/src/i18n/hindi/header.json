@@ -1,0 +1,24 @@
+{
+  "logo": {
+    "title": "जनसुनवाई-समाधान"
+  },
+  "navigation": {
+    "home": "होम",
+    "governmentOrders": "शासनादेश",
+    "download": "डाउनलोड",
+    "antiLandMafia": "एंटी भू-माफिया पोर्टल",
+    "antiCorruption": "एंटी करप्शन पोर्टल",
+    "cmMonitoring": "मुख्यमंत्री अनुश्रवण प्रणाली",
+    "sandesApp": "संदेस एप",
+    "new": "NEW!"
+  },
+  "login": {
+    "officerLogin": "अधिकारी लॉगिन",
+    "adminPanel": "Admin Panel"
+  },
+  "language": {
+    "hindi": "हिंदी",
+    "english": "English"
+  }
+}
+

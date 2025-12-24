@@ -1,0 +1,408 @@
+[
+  [
+    {
+      "type": "FeatureCollection",
+      "features": [
+        {
+          "type": "Feature",
+          "geometry": {
+            "type": "Point",
+            "coordinates": [
+              79.1300000,
+              28.0200000
+            ]
+          },
+          "properties": {
+            "ogc_fid": 201,
+            "dt_lgd": 134,
+            "st_lgd": 9,
+            "lat": 28.0200000,
+            "long": 79.1300000,
+            "Type": "Government Office",
+            "Asset_Name": "District Magistrate Office (Collectorate)",
+            "name": "District Magistrate Office (Collectorate)",
+            "poiType": "Administrative HQ"
+          }
+        },
+        {
+          "type": "Feature",
+          "geometry": {
+            "type": "Point",
+            "coordinates": [
+              79.1400000,
+              28.0200000
+            ]
+          },
+          "properties": {
+            "ogc_fid": 202,
+            "dt_lgd": 134,
+            "st_lgd": 9,
+            "lat": 28.0200000,
+            "long": 79.1400000,
+            "Type": "Government Office",
+            "Asset_Name": "Vikas Bhawan (Development HQ)",
+            "name": "Vikas Bhawan (Development HQ)",
+            "poiType": "Administrative HQ"
+          }
+        },
+        {
+          "type": "Feature",
+          "geometry": {
+            "type": "Point",
+            "coordinates": [
+              79.1200000,
+              28.0300000
+            ]
+          },
+          "properties": {
+            "ogc_fid": 203,
+            "dt_lgd": 134,
+            "st_lgd": 9,
+            "lat": 28.0300000,
+            "long": 79.1200000,
+            "Type": "Police",
+            "Asset_Name": "SSP Office Budaun (Police HQ)",
+            "name": "SSP Office Budaun (Police HQ)",
+            "poiType": "Police HQ"
+          }
+        },
+        {
+          "type": "Feature",
+          "geometry": {
+            "type": "Point",
+            "coordinates": [
+              79.1320000,
+              28.0310000
+            ]
+          },
+          "properties": {
+            "ogc_fid": 204,
+            "dt_lgd": 134,
+            "st_lgd": 9,
+            "lat": 28.0310000,
+            "long": 79.1320000,
+            "Type": "Police",
+            "Asset_Name": "Reserve Police Lines",
+            "name": "Reserve Police Lines",
+            "poiType": "Police HQ"
+          }
+        },
+        {
+          "type": "Feature",
+          "geometry": {
+            "type": "Point",
+            "coordinates": [
+              79.1300000,
+              28.0350000
+            ]
+          },
+          "properties": {
+            "ogc_fid": 205,
+            "dt_lgd": 134,
+            "st_lgd": 9,
+            "lat": 28.0350000,
+            "long": 79.1300000,
+            "Type": "Government Office",
+            "Asset_Name": "Nagar Palika Parishad Budaun",
+            "name": "Nagar Palika Parishad Budaun",
+            "poiType": "Administrative HQ"
+          }
+        },
+        {
+          "type": "Feature",
+          "geometry": {
+            "type": "Point",
+            "coordinates": [
+              78.9109000,
+              28.1294000
+            ]
+          },
+          "properties": {
+            "ogc_fid": 206,
+            "dt_lgd": 134,
+            "st_lgd": 9,
+            "lat": 28.1294000,
+            "long": 78.9109000,
+            "Type": "Government Office",
+            "Asset_Name": "Tehsil HQ Bilsi",
+            "name": "Tehsil HQ Bilsi",
+            "poiType": "Sub-district HQ"
+          }
+        },
+        {
+          "type": "Feature",
+          "geometry": {
+            "type": "Point",
+            "coordinates": [
+              78.9344000,
+              28.2978000
+            ]
+          },
+          "properties": {
+            "ogc_fid": 207,
+            "dt_lgd": 134,
+            "st_lgd": 9,
+            "lat": 28.2978000,
+            "long": 78.9344000,
+            "Type": "Government Office",
+            "Asset_Name": "Tehsil HQ Bisauli",
+            "name": "Tehsil HQ Bisauli",
+            "poiType": "Sub-district HQ"
+          }
+        },
+        {
+          "type": "Feature",
+          "geometry": {
+            "type": "Point",
+            "coordinates": [
+              79.4100000,
+              28.0300000
+            ]
+          },
+          "properties": {
+            "ogc_fid": 208,
+            "dt_lgd": 134,
+            "st_lgd": 9,
+            "lat": 28.0300000,
+            "long": 79.4100000,
+            "Type": "Government Office",
+            "Asset_Name": "Tehsil HQ Dataganj",
+            "name": "Tehsil HQ Dataganj",
+            "poiType": "Sub-district HQ"
+          }
+        },
+        {
+          "type": "Feature",
+          "geometry": {
+            "type": "Point",
+            "coordinates": [
+              78.7510000,
+              28.0680000
+            ]
+          },
+          "properties": {
+            "ogc_fid": 209,
+            "dt_lgd": 134,
+            "st_lgd": 9,
+            "lat": 28.0680000,
+            "long": 78.7510000,
+            "Type": "Government Office",
+            "Asset_Name": "Tehsil HQ Sahaswan",
+            "name": "Tehsil HQ Sahaswan",
+            "poiType": "Sub-district HQ"
+          }
+        },
+        {
+          "type": "Feature",
+          "geometry": {
+            "type": "Point",
+            "coordinates": [
+              79.2400000,
+              27.9600000
+            ]
+          },
+          "properties": {
+            "ogc_fid": 210,
+            "dt_lgd": 134,
+            "st_lgd": 9,
+            "lat": 27.9600000,
+            "long": 79.2400000,
+            "Type": "Government Office",
+            "Asset_Name": "Block Development Office Jagat",
+            "name": "Block Development Office Jagat",
+            "poiType": "Gram Panchayat Hub"
+          }
+        },
+        {
+          "type": "Feature",
+          "geometry": {
+            "type": "Point",
+            "coordinates": [
+              79.1300000,
+              28.0700000
+            ]
+          },
+          "properties": {
+            "ogc_fid": 211,
+            "dt_lgd": 134,
+            "st_lgd": 9,
+            "lat": 28.0700000,
+            "long": 79.1300000,
+            "Type": "Government Office",
+            "Asset_Name": "Block Development Office Salarpur",
+            "name": "Block Development Office Salarpur",
+            "poiType": "Gram Panchayat Hub"
+          }
+        },
+        {
+          "type": "Feature",
+          "geometry": {
+            "type": "Point",
+            "coordinates": [
+              79.0800000,
+              27.8600000
+            ]
+          },
+          "properties": {
+            "ogc_fid": 212,
+            "dt_lgd": 134,
+            "st_lgd": 9,
+            "lat": 27.8600000,
+            "long": 79.0800000,
+            "Type": "Government Office",
+            "Asset_Name": "Block Development Office Qadar Chowk",
+            "name": "Block Development Office Qadar Chowk",
+            "poiType": "Gram Panchayat Hub"
+          }
+        },
+        {
+          "type": "Feature",
+          "geometry": {
+            "type": "Point",
+            "coordinates": [
+              79.0600000,
+              28.2100000
+            ]
+          },
+          "properties": {
+            "ogc_fid": 213,
+            "dt_lgd": 134,
+            "st_lgd": 9,
+            "lat": 28.2100000,
+            "long": 79.0600000,
+            "Type": "Government Office",
+            "Asset_Name": "Block Development Office Wazirganj",
+            "name": "Block Development Office Wazirganj",
+            "poiType": "Gram Panchayat Hub"
+          }
+        },
+        {
+          "type": "Feature",
+          "geometry": {
+            "type": "Point",
+            "coordinates": [
+              79.0200000,
+              28.0200000
+            ]
+          },
+          "properties": {
+            "ogc_fid": 214,
+            "dt_lgd": 134,
+            "st_lgd": 9,
+            "lat": 28.0200000,
+            "long": 79.0200000,
+            "Type": "Government Office",
+            "Asset_Name": "Block Development Office Ujhani",
+            "name": "Block Development Office Ujhani",
+            "poiType": "Gram Panchayat Hub"
+          }
+        },
+        {
+          "type": "Feature",
+          "geometry": {
+            "type": "Point",
+            "coordinates": [
+              79.1200000,
+              28.0400000
+            ]
+          },
+          "properties": {
+            "ogc_fid": 215,
+            "dt_lgd": 134,
+            "st_lgd": 9,
+            "lat": 28.0400000,
+            "long": 79.1200000,
+            "Type": "Police",
+            "Asset_Name": "Police Station Kotwali Budaun",
+            "name": "Police Station Kotwali Budaun",
+            "poiType": "Police Station"
+          }
+        },
+        {
+          "type": "Feature",
+          "geometry": {
+            "type": "Point",
+            "coordinates": [
+              79.1320000,
+              28.0310000
+            ]
+          },
+          "properties": {
+            "ogc_fid": 216,
+            "dt_lgd": 134,
+            "st_lgd": 9,
+            "lat": 28.0310000,
+            "long": 79.1320000,
+            "Type": "Police",
+            "Asset_Name": "Police Station Civil Lines",
+            "name": "Police Station Civil Lines",
+            "poiType": "Police Station"
+          }
+        },
+        {
+          "type": "Feature",
+          "geometry": {
+            "type": "Point",
+            "coordinates": [
+              79.0200000,
+              28.0200000
+            ]
+          },
+          "properties": {
+            "ogc_fid": 217,
+            "dt_lgd": 134,
+            "st_lgd": 9,
+            "lat": 28.0200000,
+            "long": 79.0200000,
+            "Type": "Police",
+            "Asset_Name": "Police Station Ujhani",
+            "name": "Police Station Ujhani",
+            "poiType": "Police Station"
+          }
+        },
+        {
+          "type": "Feature",
+          "geometry": {
+            "type": "Point",
+            "coordinates": [
+              79.4000000,
+              28.0300000
+            ]
+          },
+          "properties": {
+            "ogc_fid": 218,
+            "dt_lgd": 134,
+            "st_lgd": 9,
+            "lat": 28.0300000,
+            "long": 79.4000000,
+            "Type": "Police",
+            "Asset_Name": "Police Station Dataganj",
+            "name": "Police Station Dataganj",
+            "poiType": "Police Station"
+          }
+        },
+        {
+          "type": "Feature",
+          "geometry": {
+            "type": "Point",
+            "coordinates": [
+              78.7510000,
+              28.0680000
+            ]
+          },
+          "properties": {
+            "ogc_fid": 219,
+            "dt_lgd": 134,
+            "st_lgd": 9,
+            "lat": 28.0680000,
+            "long": 78.7510000,
+            "Type": "Police",
+            "Asset_Name": "Police Station Sahaswan",
+            "name": "Police Station Sahaswan",
+            "poiType": "Police Station"
+          }
+        }
+      ]
+    }
+  ]
+]

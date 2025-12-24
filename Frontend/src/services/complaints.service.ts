@@ -1,0 +1,398 @@
+/**
+ * Complaints Service
+ * Maps to backend /api/v1/complaints routes
+ */
+
+import apiClient from "@/lib/api";
+import {
+  ApiResponse,
+  PaginatedResponse,
+  Complaint,
+  ComplaintFilters,
+  ComplaintNote,
+  ComplaintDocument,
+  ComplaintStatistics,
+} from "@/types";
+
+export const complaintsService = {
+  /**
+   * Get all complaints with filters
+   * GET /api/v1/complaints?page=1&limit=20&status=pending&category=roads&search=keyword
+   */
+  async getComplaints(
+    filters: ComplaintFilters = {}
+  ): Promise<PaginatedResponse<Complaint>> {
+    const params = new URLSearchParams();
+
+    if (filters.page) params.append("page", filters.page.toString());
+    if (filters.limit) params.append("limit", filters.limit.toString());
+    if (filters.status && filters.status !== "all")
+      params.append("status", filters.status);
+    if (filters.category && filters.category !== "all")
+      params.append("category", filters.category);
+    if (filters.priority && filters.priority !== "all")
+      params.append("priority", filters.priority);
+    if (filters.search) params.append("search", filters.search);
+
+    const queryString = params.toString();
+    const url = `/complaints${queryString ? `?${queryString}` : ""}`;
+
+    // apiClient.get returns response.data, which is ApiResponse<PaginatedResponse<Complaint>>
+    // The backend returns: { success: true, data: [...], meta: {...} }
+    const response = await apiClient.get<PaginatedResponse<Complaint>>(url);
+    return response;
+  },
+
+  /**
+   * Get complaint by ID
+   * GET /api/v1/complaints/:id
+   */
+  async getComplaintById(id: string): Promise<Complaint> {
+    const response = await apiClient.get<ApiResponse<Complaint>>(
+      `/complaints/${id}`
+    );
+    // apiClient.get returns response.data, which is ApiResponse<Complaint>
+    // So we need to access response.data to get the actual Complaint
+    if (response.success && response.data) {
+      return response.data;
+    }
+    throw new Error(response.error?.message || "Complaint not found");
+  },
+
+  /**
+   * Create complaint
+   * POST /api/v1/complaints
+   * Backend expects snake_case fields (contact_name, contact_email, etc.)
+   */
+  async createComplaint(complaint: Partial<Complaint>): Promise<Complaint> {
+    // Transform camelCase frontend format to snake_case backend format
+    const backendData: any = {
+      title: complaint.title,
+      description: complaint.description,
+      category: complaint.category,
+      priority: complaint.priority || "medium",
+      contact_name: complaint.contactName,
+      contact_email:
+        complaint.contactEmail ||
+        (complaint.contactPhone ? `${complaint.contactPhone}@temp.com` : ""),
+      contact_phone: complaint.contactPhone,
+      location:
+        typeof complaint.location === "string"
+          ? complaint.location
+          : complaint.location?.address || "",
+      voter_id: complaint.voterId,
+      images:
+        complaint.documents?.map((doc) => doc.fileUrl).filter(Boolean) || [],
+      // Geographic fields (required)
+      latitude:
+        complaint.latitude ??
+        (typeof complaint.location === "object" && complaint.location !== null
+          ? complaint.location.latitude
+          : 0),
+      longitude:
+        complaint.longitude ??
+        (typeof complaint.location === "object" && complaint.location !== null
+          ? complaint.location.longitude
+          : 0),
+      district_name: complaint.districtName ?? "",
+      subdistrict_name: complaint.subdistrictName ?? "",
+      village_name: complaint.villageName || undefined, // Optional
+    };
+
+    const response = await apiClient.post<ApiResponse<Complaint>>(
+      "/complaints",
+      backendData
+    );
+    return response.data;
+  },
+
+  /**
+   * Update complaint (admin only)
+   * PUT /api/v1/complaints/:id
+   */
+  async updateComplaint(
+    id: string,
+    updates: Partial<Complaint>
+  ): Promise<Complaint> {
+    const response = await apiClient.put<ApiResponse<Complaint>>(
+      `/complaints/${id}`,
+      updates
+    );
+    return response.data;
+  },
+
+  /**
+   * Delete complaint (admin only)
+   * DELETE /api/v1/complaints/:id
+   */
+  async deleteComplaint(id: string): Promise<void> {
+    await apiClient.delete<ApiResponse<void>>(`/complaints/${id}`);
+  },
+
+  /**
+   * Add note to complaint (admin only)
+   * POST /api/v1/complaints/:id/notes
+   * Backend expects: { note: string } (not content)
+   */
+  async addNote(id: string, content: string): Promise<ComplaintNote> {
+    // Validate note length (backend requires at least 5 characters)
+    if (!content || content.trim().length < 5) {
+      throw new Error("Note must be at least 5 characters");
+    }
+
+    const response = await apiClient.post<ApiResponse<any>>(
+      `/complaints/${id}/notes`,
+      {
+        note: content.trim(), // Backend expects 'note' field, not 'content'
+      }
+    );
+    if (response.success && response.data) {
+      // Transform backend snake_case to frontend camelCase
+      const note = response.data;
+      return {
+        _id: note._id || note.id,
+        complaintId: note.complaint_id,
+        content: note.note, // Backend uses 'note' field
+        createdBy: note.created_by,
+        createdAt: note.created_at,
+      };
+    }
+    throw new Error(response.error?.message || "Failed to add note");
+  },
+
+  /**
+   * Get complaint notes
+   * GET /api/v1/complaints/:id/notes
+   * Backend returns snake_case, transform to camelCase
+   */
+  async getNotes(id: string): Promise<ComplaintNote[]> {
+    const response = await apiClient.get<ApiResponse<any[]>>(
+      `/complaints/${id}/notes`
+    );
+    if (response.success && response.data) {
+      // Transform backend snake_case to frontend camelCase
+      return response.data.map((note: any) => ({
+        _id: note._id || note.id,
+        complaintId: note.complaint_id,
+        content: note.note, // Backend uses 'note' field
+        createdBy: note.created_by,
+        createdAt: note.created_at,
+      }));
+    }
+    return [];
+  },
+
+  /**
+   * Add document to complaint (admin only)
+   * POST /api/v1/complaints/:id/documents
+   * Backend expects: { file_url, file_name, file_type } (snake_case)
+   */
+  async addDocument(
+    id: string,
+    document: {
+      fileName: string;
+      fileUrl: string;
+      fileType: string;
+      fileSize: number;
+    }
+  ): Promise<ComplaintDocument> {
+    // Validate required fields
+    if (!document.fileUrl || !document.fileName || !document.fileType) {
+      throw new Error("file_url, file_name, and file_type are required");
+    }
+
+    // Validate file_type
+    if (!["inward", "outward"].includes(document.fileType)) {
+      throw new Error('file_type must be "inward" or "outward"');
+    }
+
+    // Transform camelCase to snake_case for backend
+    const backendData = {
+      file_url: document.fileUrl,
+      file_name: document.fileName,
+      file_type: document.fileType,
+    };
+
+    const response = await apiClient.post<ApiResponse<any>>(
+      `/complaints/${id}/documents`,
+      backendData
+    );
+    if (response.success && response.data) {
+      // Transform backend snake_case to frontend camelCase
+      const doc = response.data;
+      return {
+        _id: doc._id || doc.id,
+        complaintId: doc.complaint_id,
+        fileName: doc.file_name,
+        fileUrl: doc.file_url,
+        fileType: doc.file_type,
+        fileSize: doc.file_size || document.fileSize || 0,
+        uploadedBy: doc.uploaded_by,
+        createdAt: doc.created_at,
+      };
+    }
+    throw new Error(response.error?.message || "Failed to add document");
+  },
+
+  /**
+   * Get complaint documents
+   * GET /api/v1/complaints/:id/documents
+   * Backend returns snake_case, transform to camelCase
+   */
+  async getDocuments(id: string): Promise<ComplaintDocument[]> {
+    const response = await apiClient.get<ApiResponse<any[]>>(
+      `/complaints/${id}/documents`
+    );
+    if (response.success && response.data) {
+      // Transform backend snake_case to frontend camelCase
+      return response.data.map((doc: any) => ({
+        _id: doc._id || doc.id,
+        complaintId: doc.complaint_id,
+        fileName: doc.file_name,
+        fileUrl: doc.file_url,
+        fileType: doc.file_type,
+        fileSize: doc.file_size || 0,
+        uploadedBy: doc.uploaded_by,
+        createdAt: doc.created_at,
+      }));
+    }
+    return [];
+  },
+
+  /**
+   * Track complaint by phone number
+   * GET /api/v1/complaints/track/phone/:phoneNumber
+   * Backend returns: { phone, complaints, count }
+   * Backend returns snake_case, transform to camelCase
+   */
+  async trackByPhone(phoneNumber: string): Promise<Complaint[]> {
+    const response = await apiClient.get<
+      ApiResponse<{
+        phone: string;
+        complaints: any[];
+        count: number;
+      }>
+    >(`/complaints/track/phone/${phoneNumber}`);
+    // Extract complaints array from the response and transform snake_case to camelCase
+    if (response.success && response.data && response.data.complaints) {
+      return response.data.complaints.map((complaint: any) => ({
+        _id: complaint._id || complaint.id,
+        id: complaint.id,
+        complaint_id: complaint.complaint_id,
+        contactName: complaint.contact_name || complaint.contactName,
+        contactPhone: complaint.contact_phone || complaint.contactPhone,
+        contactEmail: complaint.contact_email || complaint.contactEmail,
+        title: complaint.title,
+        description: complaint.description,
+        category: complaint.category,
+        subCategory: complaint.sub_category || complaint.subCategory,
+        status: complaint.status,
+        priority: complaint.priority,
+        location: complaint.location,
+        latitude: complaint.latitude || 0,
+        longitude: complaint.longitude || 0,
+        districtName: complaint.district_name || complaint.districtName || "",
+        subdistrictName:
+          complaint.subdistrict_name || complaint.subdistrictName || "",
+        villageName: complaint.village_name || complaint.villageName,
+        voterId: complaint.voter_id || complaint.voterId,
+        documents: complaint.documents || [],
+        notes: complaint.notes || [],
+        createdAt: complaint.created_at || complaint.createdAt,
+        updatedAt: complaint.updated_at || complaint.updatedAt,
+      }));
+    }
+    return [];
+  },
+
+  /**
+   * Get complaint statistics
+   * GET /api/v1/complaints/statistics
+   */
+  async getStatistics(): Promise<ComplaintStatistics> {
+    const response = await apiClient.get<ApiResponse<ComplaintStatistics>>(
+      "/complaints/statistics"
+    );
+    return response.data;
+  },
+
+  /**
+   * Update complaint research data
+   * PUT /api/v1/complaints/:id/research
+   */
+  async updateComplaintResearch(
+    id: string,
+    researchData: any
+  ): Promise<Complaint> {
+    const response = await apiClient.put<ApiResponse<Complaint>>(
+      `/complaints/${id}/research`,
+      {
+        research_data: researchData,
+      }
+    );
+    return response.data;
+  },
+
+  /**
+   * Update complaint stage1 data (officers, letter, documents)
+   * PUT /api/v1/complaints/:id/stage1
+   */
+  async updateComplaintStage1Data(
+    id: string,
+    stage1Data: {
+      primary_officer?: any;
+      secondary_officer?: any;
+      drafted_letter?: any;
+      stage1_additional_docs?: string[];
+    }
+  ): Promise<Complaint> {
+    const response = await apiClient.put<ApiResponse<Complaint>>(
+      `/complaints/${id}/stage1`,
+      stage1Data
+    );
+    return response.data;
+  },
+
+  /**
+   * Get my complaints (for officers)
+   * GET /api/v1/complaints/my-complaints
+   */
+  async getMyComplaints(
+    filters: ComplaintFilters = {}
+  ): Promise<PaginatedResponse<Complaint>> {
+    const params = new URLSearchParams();
+
+    if (filters.page) params.append("page", filters.page.toString());
+    if (filters.limit) params.append("limit", filters.limit.toString());
+    if (filters.status && filters.status !== "all")
+      params.append("status", filters.status);
+    if (filters.category && filters.category !== "all")
+      params.append("category", filters.category);
+    if (filters.priority && filters.priority !== "all")
+      params.append("priority", filters.priority);
+    if (filters.search) params.append("search", filters.search);
+
+    const queryString = params.toString();
+    const url = `/complaints/my-complaints${
+      queryString ? `?${queryString}` : ""
+    }`;
+
+    const response = await apiClient.get<PaginatedResponse<Complaint>>(url);
+    return response;
+  },
+
+  /**
+   * Get executives (executive authorities from all districts)
+   * GET /api/v1/complaints/executives
+   */
+  async getExecutives(): Promise<any[]> {
+    const response = await apiClient.get<ApiResponse<any[]>>(
+      "/complaints/executives"
+    );
+
+    if (response.success && response.data) {
+      return response.data;
+    }
+    return [];
+  },
+};

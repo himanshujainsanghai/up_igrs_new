@@ -1,0 +1,279 @@
+[
+  {
+    "districtCode": "Bilsi",
+    "districtName": "Bilsi",
+    "heatValue": 25,
+    "state": "Uttar Pradesh",
+    "totalComplaints": 12,
+    "byStatus": {
+      "pending": 5,
+      "in_progress": 3,
+      "resolved": 3,
+      "rejected": 1
+    },
+    "byCategory": {
+      "roads": {
+        "count": 4,
+        "sub": {
+          "potholes": 2,
+          "street_lights": 2
+        }
+      },
+      "water": {
+        "count": 3,
+        "sub": {
+          "supply": 3
+        }
+      },
+      "electricity": {
+        "count": 3,
+        "sub": {
+          "outage": 2,
+          "billing": 1
+        }
+      },
+      "documents": {
+        "count": 2,
+        "sub": {
+          "certificates": 2
+        }
+      }
+    },
+    "topIssues": [
+      {
+        "category": "roads",
+        "sub": "potholes",
+        "count": 4
+      },
+      {
+        "category": "water",
+        "sub": "supply",
+        "count": 3
+      }
+    ]
+  },
+  {
+    "districtCode": "Bisauli",
+    "districtName": "Bisauli",
+    "heatValue": 18,
+    "state": "Uttar Pradesh",
+    "totalComplaints": 9,
+    "byStatus": {
+      "pending": 3,
+      "in_progress": 2,
+      "resolved": 3,
+      "rejected": 1
+    },
+    "byCategory": {
+      "roads": {
+        "count": 3,
+        "sub": {
+          "potholes": 2,
+          "drainage": 1
+        }
+      },
+      "water": {
+        "count": 2,
+        "sub": {
+          "quality": 2
+        }
+      },
+      "electricity": {
+        "count": 2,
+        "sub": {
+          "outage": 2
+        }
+      },
+      "health": {
+        "count": 2,
+        "sub": {
+          "clinic": 2
+        }
+      }
+    },
+    "topIssues": [
+      {
+        "category": "roads",
+        "sub": "potholes",
+        "count": 3
+      },
+      {
+        "category": "water",
+        "sub": "quality",
+        "count": 2
+      }
+    ]
+  },
+  {
+    "districtCode": "Budaun",
+    "districtName": "Budaun",
+    "heatValue": 45,
+    "state": "Uttar Pradesh",
+    "totalComplaints": 22,
+    "byStatus": {
+      "pending": 8,
+      "in_progress": 6,
+      "resolved": 6,
+      "rejected": 2
+    },
+    "byCategory": {
+      "roads": {
+        "count": 8,
+        "sub": {
+          "potholes": 4,
+          "street_lights": 3,
+          "drainage": 1
+        }
+      },
+      "water": {
+        "count": 5,
+        "sub": {
+          "supply": 3,
+          "quality": 2
+        }
+      },
+      "electricity": {
+        "count": 4,
+        "sub": {
+          "outage": 3,
+          "billing": 1
+        }
+      },
+      "documents": {
+        "count": 3,
+        "sub": {
+          "certificates": 2,
+          "licenses": 1
+        }
+      },
+      "health": {
+        "count": 2,
+        "sub": {
+          "hospital": 2
+        }
+      }
+    },
+    "topIssues": [
+      {
+        "category": "roads",
+        "sub": "potholes",
+        "count": 8
+      },
+      {
+        "category": "water",
+        "sub": "supply",
+        "count": 5
+      },
+      {
+        "category": "electricity",
+        "sub": "outage",
+        "count": 4
+      }
+    ]
+  },
+  {
+    "districtCode": "Dataganj",
+    "districtName": "Dataganj",
+    "heatValue": 15,
+    "state": "Uttar Pradesh",
+    "totalComplaints": 7,
+    "byStatus": {
+      "pending": 2,
+      "in_progress": 2,
+      "resolved": 2,
+      "rejected": 1
+    },
+    "byCategory": {
+      "roads": {
+        "count": 2,
+        "sub": {
+          "potholes": 2
+        }
+      },
+      "water": {
+        "count": 2,
+        "sub": {
+          "supply": 2
+        }
+      },
+      "electricity": {
+        "count": 2,
+        "sub": {
+          "outage": 2
+        }
+      },
+      "documents": {
+        "count": 1,
+        "sub": {
+          "certificates": 1
+        }
+      }
+    },
+    "topIssues": [
+      {
+        "category": "roads",
+        "sub": "potholes",
+        "count": 2
+      },
+      {
+        "category": "water",
+        "sub": "supply",
+        "count": 2
+      }
+    ]
+  },
+  {
+    "districtCode": "Sahaswan",
+    "districtName": "Sahaswan",
+    "heatValue": 20,
+    "state": "Uttar Pradesh",
+    "totalComplaints": 10,
+    "byStatus": {
+      "pending": 4,
+      "in_progress": 2,
+      "resolved": 3,
+      "rejected": 1
+    },
+    "byCategory": {
+      "roads": {
+        "count": 4,
+        "sub": {
+          "potholes": 2,
+          "street_lights": 2
+        }
+      },
+      "water": {
+        "count": 3,
+        "sub": {
+          "supply": 2,
+          "quality": 1
+        }
+      },
+      "electricity": {
+        "count": 2,
+        "sub": {
+          "outage": 2
+        }
+      },
+      "education": {
+        "count": 1,
+        "sub": {
+          "school": 1
+        }
+      }
+    },
+    "topIssues": [
+      {
+        "category": "roads",
+        "sub": "potholes",
+        "count": 4
+      },
+      {
+        "category": "water",
+        "sub": "supply",
+        "count": 3
+      }
+    ]
+  }
+]
+

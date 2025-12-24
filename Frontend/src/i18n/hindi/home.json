@@ -1,0 +1,48 @@
+{
+  "hero": {
+    "title": "जनसुनवाई - समाधान",
+    "subtitle": "Uttar Pradesh Integrated Grievance Redressal System",
+    "message1": "जनसुनवाई-समाधान के सभी संदेश संदेस एप पर उपलब्ध कराए जा रहे हैं।",
+    "message2": "संदेस एप में जनसुनवाई सम्बन्धी सभी सूचनाएं प्राप्त करने हेतु IGRS एवं संदेस एप दोनों में एक ही नंबर से पंजीकरण करें"
+  },
+  "statistics": {
+    "received": {
+      "label": "प्राप्त संदर्भ",
+      "labelEn": "Received References"
+    },
+    "pending": {
+      "label": "लंबित संदर्भ",
+      "labelEn": "Pending References"
+    },
+    "resolved": {
+      "label": "निस्तारित सन्दर्भ",
+      "labelEn": "Resolved References"
+    }
+  },
+  "actionCards": {
+    "registerGrievance": {
+      "title": "शिकायत पंजीकरण",
+      "subtitle": "शिकायत ऑनलाइन दर्ज करें"
+    },
+    "trackGrievance": {
+      "title": "शिकायत की स्थिति",
+      "subtitle": "कार्यवाही का विवरण मोबाइल/ ई-मेल के माध्यम से जानें"
+    },
+    "sendReminder": {
+      "title": "अनुस्मारक भेजें",
+      "subtitle": "नियत समय तक कार्यवाही न होने पर अनुस्मारक भेजें"
+    },
+    "giveFeedback": {
+      "title": "आपकी प्रतिक्रिया",
+      "subtitle": "शिकायत के निस्तारण के सम्बन्ध में फीडबैक/सुझाव दें"
+    }
+  },
+  "chatbot": {
+    "title": "चैट सहायक",
+    "greeting": "नमस्ते! मैं आपकी शिकायतों में मदद करने के लिए यहाँ हूँ। मैं आज आपकी कैसे सहायता कर सकता हूँ?",
+    "fileComplaint": "• शिकायत कैसे दर्ज करें?",
+    "trackComplaint": "• अपनी शिकायत की स्थिति कैसे देखें?",
+    "requestMeeting": "• मीटिंग का अनुरोध करें"
+  }
+}
+

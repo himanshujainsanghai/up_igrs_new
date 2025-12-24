@@ -1,0 +1,1049 @@
+[
+    [
+        {
+            "type": "FeatureCollection",
+            "features": [
+                {
+                    "type": "Feature",
+                    "geometry": {
+                        "type": "Point",
+                        "coordinates": [
+                            79.1199634,
+                            28.1023583
+                        ]
+                    },
+                    "properties": {
+                        "ogc_fid": 1,
+                        "gp_code": 0,
+                        "dt_lgd": 134,
+                        "sdt_lgd": 0,
+                        "st_lgd": 9,
+                        "lat": 28.1023583,
+                        "long": 79.1199634,
+                        "Village_Co": 0,
+                        "block_lgd": 0,
+                        "Town_Code": 0,
+                        "Type": "School",
+                        "Asset_Name": "Composite School Mogar",
+                        "name": "Composite School Mogar",
+                        "poiType": "School"
+                    }
+                },
+                {
+                    "type": "Feature",
+                    "geometry": {
+                        "type": "Point",
+                        "coordinates": [
+                            79.1354822,
+                            28.0877752
+                        ]
+                    },
+                    "properties": {
+                        "ogc_fid": 2,
+                        "gp_code": 0,
+                        "dt_lgd": 134,
+                        "sdt_lgd": 0,
+                        "st_lgd": 9,
+                        "lat": 28.0877752,
+                        "long": 79.1354822,
+                        "Village_Co": 0,
+                        "block_lgd": 0,
+                        "Town_Code": 0,
+                        "Type": "School",
+                        "Asset_Name": "Composite School Padauliya",
+                        "name": "Composite School Padauliya",
+                        "poiType": "School"
+                    }
+                },
+                {
+                    "type": "Feature",
+                    "geometry": {
+                        "type": "Point",
+                        "coordinates": [
+                            79.1047374,
+                            28.0865840
+                        ]
+                    },
+                    "properties": {
+                        "ogc_fid": 3,
+                        "gp_code": 0,
+                        "dt_lgd": 134,
+                        "sdt_lgd": 0,
+                        "st_lgd": 9,
+                        "lat": 28.0865840,
+                        "long": 79.1047374,
+                        "Village_Co": 0,
+                        "block_lgd": 0,
+                        "Town_Code": 0,
+                        "Type": "School",
+                        "Asset_Name": "Kamla Hori School, Dahemi",
+                        "name": "Kamla Hori School, Dahemi",
+                        "poiType": "School"
+                    }
+                },
+                {
+                    "type": "Feature",
+                    "geometry": {
+                        "type": "Point",
+                        "coordinates": [
+                            79.1172676,
+                            28.1024574
+                        ]
+                    },
+                    "properties": {
+                        "ogc_fid": 4,
+                        "gp_code": 0,
+                        "dt_lgd": 134,
+                        "sdt_lgd": 0,
+                        "st_lgd": 9,
+                        "lat": 28.1024574,
+                        "long": 79.1172676,
+                        "Village_Co": 0,
+                        "block_lgd": 0,
+                        "Town_Code": 0,
+                        "Type": "School",
+                        "Asset_Name": "Kastoorba Gandhi School",
+                        "name": "Kastoorba Gandhi School",
+                        "poiType": "School"
+                    }
+                },
+                {
+                    "type": "Feature",
+                    "geometry": {
+                        "type": "Point",
+                        "coordinates": [
+                            79.1303317,
+                            28.1086679
+                        ]
+                    },
+                    "properties": {
+                        "ogc_fid": 5,
+                        "gp_code": 0,
+                        "dt_lgd": 134,
+                        "sdt_lgd": 0,
+                        "st_lgd": 9,
+                        "lat": 28.1086679,
+                        "long": 79.1303317,
+                        "Village_Co": 0,
+                        "block_lgd": 0,
+                        "Town_Code": 0,
+                        "Type": "School",
+                        "Asset_Name": "Primary School, Kasimpur",
+                        "name": "Primary School, Kasimpur",
+                        "poiType": "School"
+                    }
+                },
+                {
+                    "type": "Feature",
+                    "geometry": {
+                        "type": "Point",
+                        "coordinates": [
+                            79.0800000,
+                            28.0200000
+                        ]
+                    },
+                    "properties": {
+                        "ogc_fid": 6,
+                        "gp_code": 0,
+                        "dt_lgd": 134,
+                        "sdt_lgd": 0,
+                        "st_lgd": 9,
+                        "lat": 28.0200000,
+                        "long": 79.0800000,
+                        "Village_Co": 0,
+                        "block_lgd": 0,
+                        "Town_Code": 0,
+                        "Type": "Hospital",
+                        "Asset_Name": "Budaun Government Medical College",
+                        "name": "Budaun Government Medical College",
+                        "poiType": "Hospital"
+                    }
+                },
+                {
+                    "type": "Feature",
+                    "geometry": {
+                        "type": "Point",
+                        "coordinates": [
+                            79.1300000,
+                            28.0300000
+                        ]
+                    },
+                    "properties": {
+                        "ogc_fid": 7,
+                        "gp_code": 0,
+                        "dt_lgd": 134,
+                        "sdt_lgd": 0,
+                        "st_lgd": 9,
+                        "lat": 28.0300000,
+                        "long": 79.1300000,
+                        "Village_Co": 0,
+                        "block_lgd": 0,
+                        "Town_Code": 0,
+                        "Type": "Hospital",
+                        "Asset_Name": "District Hospital (Male)",
+                        "name": "District Hospital (Male)",
+                        "poiType": "Hospital"
+                    }
+                },
+                {
+                    "type": "Feature",
+                    "geometry": {
+                        "type": "Point",
+                        "coordinates": [
+                            79.1271000,
+                            28.0311000
+                        ]
+                    },
+                    "properties": {
+                        "ogc_fid": 8,
+                        "gp_code": 0,
+                        "dt_lgd": 134,
+                        "sdt_lgd": 0,
+                        "st_lgd": 9,
+                        "lat": 28.0311000,
+                        "long": 79.1271000,
+                        "Village_Co": 0,
+                        "block_lgd": 0,
+                        "Town_Code": 0,
+                        "Type": "Hospital",
+                        "Asset_Name": "District Hospital (Female)",
+                        "name": "District Hospital (Female)",
+                        "poiType": "Hospital"
+                    }
+                },
+                {
+                    "type": "Feature",
+                    "geometry": {
+                        "type": "Point",
+                        "coordinates": [
+                            79.1267000,
+                            28.0381000
+                        ]
+                    },
+                    "properties": {
+                        "ogc_fid": 9,
+                        "gp_code": 0,
+                        "dt_lgd": 134,
+                        "sdt_lgd": 0,
+                        "st_lgd": 9,
+                        "lat": 28.0381000,
+                        "long": 79.1267000,
+                        "Village_Co": 0,
+                        "block_lgd": 0,
+                        "Town_Code": 0,
+                        "Type": "School",
+                        "Asset_Name": "De Paul School",
+                        "name": "De Paul School",
+                        "poiType": "School"
+                    }
+                },
+                {
+                    "type": "Feature",
+                    "geometry": {
+                        "type": "Point",
+                        "coordinates": [
+                            79.1500000,
+                            28.0100000
+                        ]
+                    },
+                    "properties": {
+                        "ogc_fid": 10,
+                        "gp_code": 0,
+                        "dt_lgd": 134,
+                        "sdt_lgd": 0,
+                        "st_lgd": 9,
+                        "lat": 28.0100000,
+                        "long": 79.1500000,
+                        "Village_Co": 0,
+                        "block_lgd": 0,
+                        "Town_Code": 0,
+                        "Type": "School",
+                        "Asset_Name": "Mother Athena School",
+                        "name": "Mother Athena School",
+                        "poiType": "School"
+                    }
+                },
+                {
+                    "type": "Feature",
+                    "geometry": {
+                        "type": "Point",
+                        "coordinates": [
+                            78.9100000,
+                            28.1200000
+                        ]
+                    },
+                    "properties": {
+                        "ogc_fid": 11,
+                        "gp_code": 0,
+                        "dt_lgd": 134,
+                        "sdt_lgd": 0,
+                        "st_lgd": 9,
+                        "lat": 28.1200000,
+                        "long": 78.9100000,
+                        "Village_Co": 0,
+                        "block_lgd": 0,
+                        "Town_Code": 0,
+                        "Type": "School",
+                        "Asset_Name": "Baba International School",
+                        "name": "Baba International School",
+                        "poiType": "School"
+                    }
+                },
+                {
+                    "type": "Feature",
+                    "geometry": {
+                        "type": "Point",
+                        "coordinates": [
+                            79.1000000,
+                            28.0200000
+                        ]
+                    },
+                    "properties": {
+                        "ogc_fid": 12,
+                        "gp_code": 0,
+                        "dt_lgd": 134,
+                        "sdt_lgd": 0,
+                        "st_lgd": 9,
+                        "lat": 28.0200000,
+                        "long": 79.1000000,
+                        "Village_Co": 0,
+                        "block_lgd": 0,
+                        "Town_Code": 0,
+                        "Type": "School",
+                        "Asset_Name": "Tithonus International School",
+                        "name": "Tithonus International School",
+                        "poiType": "School"
+                    }
+                },
+                {
+                    "type": "Feature",
+                    "geometry": {
+                        "type": "Point",
+                        "coordinates": [
+                            79.1300000,
+                            28.0500000
+                        ]
+                    },
+                    "properties": {
+                        "ogc_fid": 13,
+                        "gp_code": 0,
+                        "dt_lgd": 134,
+                        "sdt_lgd": 0,
+                        "st_lgd": 9,
+                        "lat": 28.0500000,
+                        "long": 79.1300000,
+                        "Village_Co": 0,
+                        "block_lgd": 0,
+                        "Town_Code": 0,
+                        "Type": "School",
+                        "Asset_Name": "Blooming Dale School",
+                        "name": "Blooming Dale School",
+                        "poiType": "School"
+                    }
+                },
+                {
+                    "type": "Feature",
+                    "geometry": {
+                        "type": "Point",
+                        "coordinates": [
+                            79.1310000,
+                            28.0290000
+                        ]
+                    },
+                    "properties": {
+                        "ogc_fid": 14,
+                        "gp_code": 0,
+                        "dt_lgd": 134,
+                        "sdt_lgd": 0,
+                        "st_lgd": 9,
+                        "lat": 28.0290000,
+                        "long": 79.1310000,
+                        "Village_Co": 0,
+                        "block_lgd": 0,
+                        "Town_Code": 0,
+                        "Type": "Hospital",
+                        "Asset_Name": "Rama Hospital",
+                        "name": "Rama Hospital",
+                        "poiType": "Hospital"
+                    }
+                },
+                {
+                    "type": "Feature",
+                    "geometry": {
+                        "type": "Point",
+                        "coordinates": [
+                            79.1290000,
+                            28.0310000
+                        ]
+                    },
+                    "properties": {
+                        "ogc_fid": 15,
+                        "gp_code": 0,
+                        "dt_lgd": 134,
+                        "sdt_lgd": 0,
+                        "st_lgd": 9,
+                        "lat": 28.0310000,
+                        "long": 79.1290000,
+                        "Village_Co": 0,
+                        "block_lgd": 0,
+                        "Town_Code": 0,
+                        "Type": "Hospital",
+                        "Asset_Name": "Sai Hospital & Heart Care Centre",
+                        "name": "Sai Hospital & Heart Care Centre",
+                        "poiType": "Hospital"
+                    }
+                },
+                {
+                    "type": "Feature",
+                    "geometry": {
+                        "type": "Point",
+                        "coordinates": [
+                            79.1500000,
+                            28.0400000
+                        ]
+                    },
+                    "properties": {
+                        "ogc_fid": 16,
+                        "gp_code": 0,
+                        "dt_lgd": 134,
+                        "sdt_lgd": 0,
+                        "st_lgd": 9,
+                        "lat": 28.0400000,
+                        "long": 79.1500000,
+                        "Village_Co": 0,
+                        "block_lgd": 0,
+                        "Town_Code": 0,
+                        "Type": "School",
+                        "Asset_Name": "HP International School",
+                        "name": "HP International School",
+                        "poiType": "School"
+                    }
+                },
+                {
+                    "type": "Feature",
+                    "geometry": {
+                        "type": "Point",
+                        "coordinates": [
+                            79.1400000,
+                            28.0200000
+                        ]
+                    },
+                    "properties": {
+                        "ogc_fid": 17,
+                        "gp_code": 0,
+                        "dt_lgd": 134,
+                        "sdt_lgd": 0,
+                        "st_lgd": 9,
+                        "lat": 28.0200000,
+                        "long": 79.1400000,
+                        "Village_Co": 0,
+                        "block_lgd": 0,
+                        "Town_Code": 0,
+                        "Type": "School",
+                        "Asset_Name": "Shiv Devi Saraswati Vidya Mandir",
+                        "name": "Shiv Devi Saraswati Vidya Mandir",
+                        "poiType": "School"
+                    }
+                },
+                {
+                    "type": "Feature",
+                    "geometry": {
+                        "type": "Point",
+                        "coordinates": [
+                            78.9200000,
+                            28.4300000
+                        ]
+                    },
+                    "properties": {
+                        "ogc_fid": 18,
+                        "gp_code": 0,
+                        "dt_lgd": 134,
+                        "sdt_lgd": 0,
+                        "st_lgd": 9,
+                        "lat": 28.4300000,
+                        "long": 78.9200000,
+                        "Village_Co": 0,
+                        "block_lgd": 0,
+                        "Town_Code": 0,
+                        "Type": "School",
+                        "Asset_Name": "Jawahar Navodaya Vidyalaya",
+                        "name": "Jawahar Navodaya Vidyalaya",
+                        "poiType": "School"
+                    }
+                },
+                {
+                    "type": "Feature",
+                    "geometry": {
+                        "type": "Point",
+                        "coordinates": [
+                            79.0300000,
+                            28.0000000
+                        ]
+                    },
+                    "properties": {
+                        "ogc_fid": 19,
+                        "gp_code": 0,
+                        "dt_lgd": 134,
+                        "sdt_lgd": 0,
+                        "st_lgd": 9,
+                        "lat": 28.0000000,
+                        "long": 79.0300000,
+                        "Village_Co": 0,
+                        "block_lgd": 0,
+                        "Town_Code": 0,
+                        "Type": "School",
+                        "Asset_Name": "APS International School",
+                        "name": "APS International School",
+                        "poiType": "School"
+                    }
+                },
+                {
+                    "type": "Feature",
+                    "geometry": {
+                        "type": "Point",
+                        "coordinates": [
+                            79.1000000,
+                            28.0300000
+                        ]
+                    },
+                    "properties": {
+                        "ogc_fid": 20,
+                        "gp_code": 0,
+                        "dt_lgd": 134,
+                        "sdt_lgd": 0,
+                        "st_lgd": 9,
+                        "lat": 28.0300000,
+                        "long": 79.1000000,
+                        "Village_Co": 0,
+                        "block_lgd": 0,
+                        "Town_Code": 0,
+                        "Type": "School",
+                        "Asset_Name": "Florence Nightingale Public School",
+                        "name": "Florence Nightingale Public School",
+                        "poiType": "School"
+                    }
+                },
+                {
+                    "type": "Feature",
+                    "geometry": {
+                        "type": "Point",
+                        "coordinates": [
+                            79.1199634,
+                            28.1023583
+                        ]
+                    },
+                    "properties": {
+                        "ogc_fid": 1,
+                        "gp_code": 0,
+                        "dt_lgd": 134,
+                        "sdt_lgd": 0,
+                        "st_lgd": 9,
+                        "lat": 28.1023583,
+                        "long": 79.1199634,
+                        "Village_Co": 0,
+                        "block_lgd": 0,
+                        "Town_Code": 0,
+                        "Type": "School",
+                        "Asset_Name": "Composite School Mogar",
+                        "name": "Composite School Mogar",
+                        "poiType": "School"
+                    }
+                },
+                {
+                    "type": "Feature",
+                    "geometry": {
+                        "type": "Point",
+                        "coordinates": [
+                            79.1354822,
+                            28.0877752
+                        ]
+                    },
+                    "properties": {
+                        "ogc_fid": 2,
+                        "gp_code": 0,
+                        "dt_lgd": 134,
+                        "sdt_lgd": 0,
+                        "st_lgd": 9,
+                        "lat": 28.0877752,
+                        "long": 79.1354822,
+                        "Village_Co": 0,
+                        "block_lgd": 0,
+                        "Town_Code": 0,
+                        "Type": "School",
+                        "Asset_Name": "Composite School Padauliya",
+                        "name": "Composite School Padauliya",
+                        "poiType": "School"
+                    }
+                },
+                {
+                    "type": "Feature",
+                    "geometry": {
+                        "type": "Point",
+                        "coordinates": [
+                            79.1047374,
+                            28.0865840
+                        ]
+                    },
+                    "properties": {
+                        "ogc_fid": 3,
+                        "gp_code": 0,
+                        "dt_lgd": 134,
+                        "sdt_lgd": 0,
+                        "st_lgd": 9,
+                        "lat": 28.0865840,
+                        "long": 79.1047374,
+                        "Village_Co": 0,
+                        "block_lgd": 0,
+                        "Town_Code": 0,
+                        "Type": "School",
+                        "Asset_Name": "Kamla Hori School, Dahemi",
+                        "name": "Kamla Hori School, Dahemi",
+                        "poiType": "School"
+                    }
+                },
+                {
+                    "type": "Feature",
+                    "geometry": {
+                        "type": "Point",
+                        "coordinates": [
+                            79.1172676,
+                            28.1024574
+                        ]
+                    },
+                    "properties": {
+                        "ogc_fid": 4,
+                        "gp_code": 0,
+                        "dt_lgd": 134,
+                        "sdt_lgd": 0,
+                        "st_lgd": 9,
+                        "lat": 28.1024574,
+                        "long": 79.1172676,
+                        "Village_Co": 0,
+                        "block_lgd": 0,
+                        "Town_Code": 0,
+                        "Type": "School",
+                        "Asset_Name": "Kastoorba Gandhi School",
+                        "name": "Kastoorba Gandhi School",
+                        "poiType": "School"
+                    }
+                },
+                {
+                    "type": "Feature",
+                    "geometry": {
+                        "type": "Point",
+                        "coordinates": [
+                            79.1303317,
+                            28.1086679
+                        ]
+                    },
+                    "properties": {
+                        "ogc_fid": 5,
+                        "gp_code": 0,
+                        "dt_lgd": 134,
+                        "sdt_lgd": 0,
+                        "st_lgd": 9,
+                        "lat": 28.1086679,
+                        "long": 79.1303317,
+                        "Village_Co": 0,
+                        "block_lgd": 0,
+                        "Town_Code": 0,
+                        "Type": "School",
+                        "Asset_Name": "Primary School, Kasimpur",
+                        "name": "Primary School, Kasimpur",
+                        "poiType": "School"
+                    }
+                },
+                {
+                    "type": "Feature",
+                    "geometry": {
+                        "type": "Point",
+                        "coordinates": [
+                            79.0800000,
+                            28.0200000
+                        ]
+                    },
+                    "properties": {
+                        "ogc_fid": 6,
+                        "gp_code": 0,
+                        "dt_lgd": 134,
+                        "sdt_lgd": 0,
+                        "st_lgd": 9,
+                        "lat": 28.0200000,
+                        "long": 79.0800000,
+                        "Village_Co": 0,
+                        "block_lgd": 0,
+                        "Town_Code": 0,
+                        "Type": "Hospital",
+                        "Asset_Name": "Budaun Government Medical College",
+                        "name": "Budaun Government Medical College",
+                        "poiType": "Hospital"
+                    }
+                },
+                {
+                    "type": "Feature",
+                    "geometry": {
+                        "type": "Point",
+                        "coordinates": [
+                            79.1300000,
+                            28.0300000
+                        ]
+                    },
+                    "properties": {
+                        "ogc_fid": 7,
+                        "gp_code": 0,
+                        "dt_lgd": 134,
+                        "sdt_lgd": 0,
+                        "st_lgd": 9,
+                        "lat": 28.0300000,
+                        "long": 79.1300000,
+                        "Village_Co": 0,
+                        "block_lgd": 0,
+                        "Town_Code": 0,
+                        "Type": "Hospital",
+                        "Asset_Name": "District Hospital (Male)",
+                        "name": "District Hospital (Male)",
+                        "poiType": "Hospital"
+                    }
+                },
+                {
+                    "type": "Feature",
+                    "geometry": {
+                        "type": "Point",
+                        "coordinates": [
+                            79.1271000,
+                            28.0311000
+                        ]
+                    },
+                    "properties": {
+                        "ogc_fid": 8,
+                        "gp_code": 0,
+                        "dt_lgd": 134,
+                        "sdt_lgd": 0,
+                        "st_lgd": 9,
+                        "lat": 28.0311000,
+                        "long": 79.1271000,
+                        "Village_Co": 0,
+                        "block_lgd": 0,
+                        "Town_Code": 0,
+                        "Type": "Hospital",
+                        "Asset_Name": "District Hospital (Female)",
+                        "name": "District Hospital (Female)",
+                        "poiType": "Hospital"
+                    }
+                },
+                {
+                    "type": "Feature",
+                    "geometry": {
+                        "type": "Point",
+                        "coordinates": [
+                            79.1267000,
+                            28.0381000
+                        ]
+                    },
+                    "properties": {
+                        "ogc_fid": 9,
+                        "gp_code": 0,
+                        "dt_lgd": 134,
+                        "sdt_lgd": 0,
+                        "st_lgd": 9,
+                        "lat": 28.0381000,
+                        "long": 79.1267000,
+                        "Village_Co": 0,
+                        "block_lgd": 0,
+                        "Town_Code": 0,
+                        "Type": "School",
+                        "Asset_Name": "De Paul School",
+                        "name": "De Paul School",
+                        "poiType": "School"
+                    }
+                },
+                {
+                    "type": "Feature",
+                    "geometry": {
+                        "type": "Point",
+                        "coordinates": [
+                            79.1500000,
+                            28.0100000
+                        ]
+                    },
+                    "properties": {
+                        "ogc_fid": 10,
+                        "gp_code": 0,
+                        "dt_lgd": 134,
+                        "sdt_lgd": 0,
+                        "st_lgd": 9,
+                        "lat": 28.0100000,
+                        "long": 79.1500000,
+                        "Village_Co": 0,
+                        "block_lgd": 0,
+                        "Town_Code": 0,
+                        "Type": "School",
+                        "Asset_Name": "Mother Athena School",
+                        "name": "Mother Athena School",
+                        "poiType": "School"
+                    }
+                },
+                {
+                    "type": "Feature",
+                    "geometry": {
+                        "type": "Point",
+                        "coordinates": [
+                            78.9100000,
+                            28.1200000
+                        ]
+                    },
+                    "properties": {
+                        "ogc_fid": 11,
+                        "gp_code": 0,
+                        "dt_lgd": 134,
+                        "sdt_lgd": 0,
+                        "st_lgd": 9,
+                        "lat": 28.1200000,
+                        "long": 78.9100000,
+                        "Village_Co": 0,
+                        "block_lgd": 0,
+                        "Town_Code": 0,
+                        "Type": "School",
+                        "Asset_Name": "Baba International School",
+                        "name": "Baba International School",
+                        "poiType": "School"
+                    }
+                },
+                {
+                    "type": "Feature",
+                    "geometry": {
+                        "type": "Point",
+                        "coordinates": [
+                            79.1000000,
+                            28.0200000
+                        ]
+                    },
+                    "properties": {
+                        "ogc_fid": 12,
+                        "gp_code": 0,
+                        "dt_lgd": 134,
+                        "sdt_lgd": 0,
+                        "st_lgd": 9,
+                        "lat": 28.0200000,
+                        "long": 79.1000000,
+                        "Village_Co": 0,
+                        "block_lgd": 0,
+                        "Town_Code": 0,
+                        "Type": "School",
+                        "Asset_Name": "Tithonus International School",
+                        "name": "Tithonus International School",
+                        "poiType": "School"
+                    }
+                },
+                {
+                    "type": "Feature",
+                    "geometry": {
+                        "type": "Point",
+                        "coordinates": [
+                            79.1300000,
+                            28.0500000
+                        ]
+                    },
+                    "properties": {
+                        "ogc_fid": 13,
+                        "gp_code": 0,
+                        "dt_lgd": 134,
+                        "sdt_lgd": 0,
+                        "st_lgd": 9,
+                        "lat": 28.0500000,
+                        "long": 79.1300000,
+                        "Village_Co": 0,
+                        "block_lgd": 0,
+                        "Town_Code": 0,
+                        "Type": "School",
+                        "Asset_Name": "Blooming Dale School",
+                        "name": "Blooming Dale School",
+                        "poiType": "School"
+                    }
+                },
+                {
+                    "type": "Feature",
+                    "geometry": {
+                        "type": "Point",
+                        "coordinates": [
+                            79.1310000,
+                            28.0290000
+                        ]
+                    },
+                    "properties": {
+                        "ogc_fid": 14,
+                        "gp_code": 0,
+                        "dt_lgd": 134,
+                        "sdt_lgd": 0,
+                        "st_lgd": 9,
+                        "lat": 28.0290000,
+                        "long": 79.1310000,
+                        "Village_Co": 0,
+                        "block_lgd": 0,
+                        "Town_Code": 0,
+                        "Type": "Hospital",
+                        "Asset_Name": "Rama Hospital",
+                        "name": "Rama Hospital",
+                        "poiType": "Hospital"
+                    }
+                },
+                {
+                    "type": "Feature",
+                    "geometry": {
+                        "type": "Point",
+                        "coordinates": [
+                            79.1290000,
+                            28.0310000
+                        ]
+                    },
+                    "properties": {
+                        "ogc_fid": 15,
+                        "gp_code": 0,
+                        "dt_lgd": 134,
+                        "sdt_lgd": 0,
+                        "st_lgd": 9,
+                        "lat": 28.0310000,
+                        "long": 79.1290000,
+                        "Village_Co": 0,
+                        "block_lgd": 0,
+                        "Town_Code": 0,
+                        "Type": "Hospital",
+                        "Asset_Name": "Sai Hospital & Heart Care Centre",
+                        "name": "Sai Hospital & Heart Care Centre",
+                        "poiType": "Hospital"
+                    }
+                },
+                {
+                    "type": "Feature",
+                    "geometry": {
+                        "type": "Point",
+                        "coordinates": [
+                            79.1500000,
+                            28.0400000
+                        ]
+                    },
+                    "properties": {
+                        "ogc_fid": 16,
+                        "gp_code": 0,
+                        "dt_lgd": 134,
+                        "sdt_lgd": 0,
+                        "st_lgd": 9,
+                        "lat": 28.0400000,
+                        "long": 79.1500000,
+                        "Village_Co": 0,
+                        "block_lgd": 0,
+                        "Town_Code": 0,
+                        "Type": "School",
+                        "Asset_Name": "HP International School",
+                        "name": "HP International School",
+                        "poiType": "School"
+                    }
+                },
+                {
+                    "type": "Feature",
+                    "geometry": {
+                        "type": "Point",
+                        "coordinates": [
+                            79.1400000,
+                            28.0200000
+                        ]
+                    },
+                    "properties": {
+                        "ogc_fid": 17,
+                        "gp_code": 0,
+                        "dt_lgd": 134,
+                        "sdt_lgd": 0,
+                        "st_lgd": 9,
+                        "lat": 28.0200000,
+                        "long": 79.1400000,
+                        "Village_Co": 0,
+                        "block_lgd": 0,
+                        "Town_Code": 0,
+                        "Type": "School",
+                        "Asset_Name": "Shiv Devi Saraswati Vidya Mandir",
+                        "name": "Shiv Devi Saraswati Vidya Mandir",
+                        "poiType": "School"
+                    }
+                },
+                {
+                    "type": "Feature",
+                    "geometry": {
+                        "type": "Point",
+                        "coordinates": [
+                            78.9200000,
+                            28.4300000
+                        ]
+                    },
+                    "properties": {
+                        "ogc_fid": 18,
+                        "gp_code": 0,
+                        "dt_lgd": 134,
+                        "sdt_lgd": 0,
+                        "st_lgd": 9,
+                        "lat": 28.4300000,
+                        "long": 78.9200000,
+                        "Village_Co": 0,
+                        "block_lgd": 0,
+                        "Town_Code": 0,
+                        "Type": "School",
+                        "Asset_Name": "Jawahar Navodaya Vidyalaya",
+                        "name": "Jawahar Navodaya Vidyalaya",
+                        "poiType": "School"
+                    }
+                },
+                {
+                    "type": "Feature",
+                    "geometry": {
+                        "type": "Point",
+                        "coordinates": [
+                            79.0300000,
+                            28.0000000
+                        ]
+                    },
+                    "properties": {
+                        "ogc_fid": 19,
+                        "gp_code": 0,
+                        "dt_lgd": 134,
+                        "sdt_lgd": 0,
+                        "st_lgd": 9,
+                        "lat": 28.0000000,
+                        "long": 79.0300000,
+                        "Village_Co": 0,
+                        "block_lgd": 0,
+                        "Town_Code": 0,
+                        "Type": "School",
+                        "Asset_Name": "APS International School",
+                        "name": "APS International School",
+                        "poiType": "School"
+                    }
+                },
+                {
+                    "type": "Feature",
+                    "geometry": {
+                        "type": "Point",
+                        "coordinates": [
+                            79.1000000,
+                            28.0300000
+                        ]
+                    },
+                    "properties": {
+                        "ogc_fid": 20,
+                        "gp_code": 0,
+                        "dt_lgd": 134,
+                        "sdt_lgd": 0,
+                        "st_lgd": 9,
+                        "lat": 28.0300000,
+                        "long": 79.1000000,
+                        "Village_Co": 0,
+                        "block_lgd": 0,
+                        "Town_Code": 0,
+                        "Type": "School",
+                        "Asset_Name": "Florence Nightingale Public School",
+                        "name": "Florence Nightingale Public School",
+                        "poiType": "School"
+                    }
+                }
+            ]
+        }
+    ]
+]

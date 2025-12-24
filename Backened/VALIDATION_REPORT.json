@@ -1,0 +1,242 @@
+{
+  "summary": {
+    "totalSteps": 19,
+    "passed": 17,
+    "failed": 0,
+    "warnings": 2
+  },
+  "results": [
+    {
+      "step": 1,
+      "name": "Verify Excel Files",
+      "status": "pass",
+      "message": "All 6 files exist"
+    },
+    {
+      "step": 2,
+      "name": "Read Block Master",
+      "status": "pass",
+      "message": "Found 0 blocks",
+      "details": {
+        "blocks": []
+      }
+    },
+    {
+      "step": 3,
+      "name": "Read Tehsil Master",
+      "status": "pass",
+      "message": "Found 0 tehsils",
+      "details": {
+        "tehsils": []
+      }
+    },
+    {
+      "step": 4,
+      "name": "Read Thana Master",
+      "status": "pass",
+      "message": "Found 0 thanas",
+      "details": {
+        "thanas": []
+      }
+    },
+    {
+      "step": 5,
+      "name": "Read BlockWiseGram",
+      "status": "pass",
+      "message": "Found 0 grams",
+      "details": {
+        "sample": []
+      }
+    },
+    {
+      "step": 6,
+      "name": "Read TehsilWiseGram",
+      "status": "pass",
+      "message": "Found 0 grams",
+      "details": {
+        "sample": []
+      }
+    },
+    {
+      "step": 7,
+      "name": "Read Gram Master",
+      "status": "pass",
+      "message": "Found 0 grams",
+      "details": {
+        "sample": []
+      }
+    },
+    {
+      "step": 8,
+      "name": "Validate Tehsil Names",
+      "status": "warning",
+      "message": "Mismatches found",
+      "details": {
+        "missingInDb": [],
+        "missingInExcel": [
+          "gunnaur",
+          "dataganj",
+          "badaun",
+          "bilsi",
+          "bisauli",
+          "sahaswan"
+        ]
+      }
+    },
+    {
+      "step": 9,
+      "name": "Validate Block Names",
+      "status": "pass",
+      "message": "All block names found in database"
+    },
+    {
+      "step": 10,
+      "name": "Validate Panchayat Names",
+      "status": "pass",
+      "message": "Found 0 panchayats in Excel, 20 in DB",
+      "details": {
+        "missingInDb": []
+      }
+    },
+    {
+      "step": 11,
+      "name": "Validate Village Names",
+      "status": "pass",
+      "message": "Excel: 0, DB: 1745",
+      "details": {
+        "missingInDb": 0,
+        "missingInExcel": 1628
+      }
+    },
+    {
+      "step": 12,
+      "name": "Check Existing Villages",
+      "status": "pass",
+      "message": "Total: 1745, With Block: 32, With Panchayat: 25"
+    },
+    {
+      "step": 13,
+      "name": "Check Existing Blocks",
+      "status": "pass",
+      "message": "Found 1 unique blocks",
+      "details": {
+        "blocks": [
+          "Ambiapur"
+        ]
+      }
+    },
+    {
+      "step": 14,
+      "name": "Check Existing Panchayats",
+      "status": "pass",
+      "message": "Found 20 unique panchayats",
+      "details": {
+        "sample": [
+          "अकौली",
+          "अगौल",
+          "अम्वियापुर",
+          "उलैया",
+          "ओया",
+          "खेडापूर्वी",
+          "खैरी",
+          "खौसरा",
+          "गढौली",
+          "गुदनी"
+        ]
+      }
+    },
+    {
+      "step": 15,
+      "name": "Map BlockWiseGram",
+      "status": "pass",
+      "message": "Mapped: 0, Skipped: 0, Errors: 0"
+    },
+    {
+      "step": 16,
+      "name": "Map TehsilWiseGram",
+      "status": "pass",
+      "message": "Mapped: 0, Skipped: 0, Errors: 0"
+    },
+    {
+      "step": 17,
+      "name": "Map Thana Data",
+      "status": "pass",
+      "message": "Mapped: 0, Skipped: 0, Errors: 0"
+    },
+    {
+      "step": 18,
+      "name": "Validate LGD Codes",
+      "status": "pass",
+      "message": "All LGD codes are valid"
+    },
+    {
+      "step": 19,
+      "name": "Check Duplicates",
+      "status": "warning",
+      "message": "Found 20 duplicate groups",
+      "details": {
+        "sample": [
+          {
+            "_id": {
+              "name": "Baura",
+              "tehsil": 783
+            },
+            "count": 2
+          },
+          {
+            "_id": {
+              "name": "Chandaura",
+              "tehsil": 782
+            },
+            "count": 2
+          },
+          {
+            "_id": {
+              "name": "Hasanpur",
+              "tehsil": 782
+            },
+            "count": 2
+          },
+          {
+            "_id": {
+              "name": "Jaipal Pur Dhanaura",
+              "tehsil": 783
+            },
+            "count": 2
+          },
+          {
+            "_id": {
+              "name": "Mugarra",
+              "tehsil": 783
+            },
+            "count": 2
+          }
+        ]
+      }
+    }
+  ],
+  "mappingResults": [
+    {
+      "source": "BlockWiseGram_Master.xls",
+      "target": "Village",
+      "mapped": 0,
+      "skipped": 0,
+      "errors": 0
+    },
+    {
+      "source": "TehsilWiseGram_Master.xls",
+      "target": "Village",
+      "mapped": 0,
+      "skipped": 0,
+      "errors": 0
+    },
+    {
+      "source": "Thana_Master.xls",
+      "target": "Thana",
+      "mapped": 0,
+      "skipped": 0,
+      "errors": 0
+    }
+  ],
+  "timestamp": "2025-12-20T20:59:09.021Z"
+}

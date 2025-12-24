@@ -1,0 +1,48 @@
+{
+  "hero": {
+    "title": "Jansunwai - Samadhan",
+    "subtitle": "Uttar Pradesh Integrated Grievance Redressal System",
+    "message1": "All messages of Jansunwai-Samadhan are being made available on the Sandes App.",
+    "message2": "To receive all information related to Jansunwai in the Sandes App, register with the same number in both IGRS and Sandes App."
+  },
+  "statistics": {
+    "received": {
+      "label": "Received References",
+      "labelEn": "Received References"
+    },
+    "pending": {
+      "label": "Pending References",
+      "labelEn": "Pending References"
+    },
+    "resolved": {
+      "label": "Resolved References",
+      "labelEn": "Resolved References"
+    }
+  },
+  "actionCards": {
+    "registerGrievance": {
+      "title": "Register Grievance",
+      "subtitle": "Register Complaint online"
+    },
+    "trackGrievance": {
+      "title": "Track Grievance",
+      "subtitle": "Know the details of the action taken via mobile/email"
+    },
+    "sendReminder": {
+      "title": "Send Reminder",
+      "subtitle": "Send a reminder if action is not taken within the stipulated time"
+    },
+    "giveFeedback": {
+      "title": "Give Feedback",
+      "subtitle": "Give feedback/suggestions regarding the resolution of the complaint"
+    }
+  },
+  "chatbot": {
+    "title": "Chat Assistant",
+    "greeting": "Hello! I'm here to help you with your grievances. How can I assist you today?",
+    "fileComplaint": "• How to file a complaint?",
+    "trackComplaint": "• How to track my complaint?",
+    "requestMeeting": "• Request a meeting"
+  }
+}
+

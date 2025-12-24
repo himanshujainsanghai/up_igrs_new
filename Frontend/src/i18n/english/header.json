@@ -1,0 +1,24 @@
+{
+  "logo": {
+    "title": "Jansunwai-Samadhan"
+  },
+  "navigation": {
+    "home": "Home",
+    "governmentOrders": "Government Orders",
+    "download": "Download",
+    "antiLandMafia": "Anti Land Mafia Portal",
+    "antiCorruption": "Anti Corruption Portal",
+    "cmMonitoring": "Chief Minister Monitoring System",
+    "sandesApp": "Sandes App",
+    "new": "NEW!"
+  },
+  "login": {
+    "officerLogin": "Officer Login",
+    "adminPanel": "Admin Panel"
+  },
+  "language": {
+    "hindi": "हिंदी",
+    "english": "English"
+  }
+}
+
