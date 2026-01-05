@@ -1,12 +1,12 @@
-import { Response, NextFunction } from 'express';
-import { AuthRequest } from '../middleware/auth.middleware';
-import { Complaint } from '../models/Complaint';
-import { AIResolutionStep } from '../models/AIResolutionStep';
-import * as aiService from '../services/ai.service';
-import * as complaintsService from '../services/complaints.service';
-import { sendSuccess, sendError } from '../utils/response';
-import { NotFoundError } from '../utils/errors';
-import logger from '../config/logger';
+import { Response, NextFunction } from "express";
+import { AuthRequest } from "../middleware/auth.middleware";
+import { Complaint } from "../models/Complaint";
+import { AIResolutionStep } from "../models/AIResolutionStep";
+import * as aiService from "../services/ai.service";
+import * as complaintsService from "../services/complaints.service";
+import { sendSuccess, sendError } from "../utils/response";
+import { NotFoundError } from "../utils/errors";
+import logger from "../config/logger";
 
 /**
  * AI Controller
@@ -28,12 +28,12 @@ export const triggerAIAnalysis = async (
     // Fetch complaint
     const complaint = await Complaint.findOne({ id }).lean();
     if (!complaint) {
-      throw new NotFoundError('Complaint');
+      throw new NotFoundError("Complaint");
     }
 
     if (complaint.ai_analysis_completed) {
       sendSuccess(res, {
-        message: 'AI analysis already completed',
+        message: "AI analysis already completed",
         analysis: complaint.ai_analysis,
       });
       return;
@@ -45,7 +45,7 @@ export const triggerAIAnalysis = async (
       complaint.title,
       complaint.description,
       complaint.category,
-      complaint.location || '',
+      complaint.location || "",
       complaint.priority
     );
 
@@ -69,7 +69,7 @@ export const triggerAIAnalysis = async (
     // Save resolution steps
     if (analysis.resolution_steps && analysis.resolution_steps.length > 0) {
       const steps = analysis.resolution_steps.map((step) => ({
-        id: require('uuid').v4(),
+        id: require("uuid").v4(),
         complaint_id: id,
         step_number: step.step_number,
         title: step.title,
@@ -77,7 +77,7 @@ export const triggerAIAnalysis = async (
         estimated_cost: step.estimated_cost,
         estimated_days: step.estimated_days,
         department: step.department,
-        status: 'pending',
+        status: "pending",
         created_at: new Date(),
         updated_at: new Date(),
       }));
@@ -87,7 +87,7 @@ export const triggerAIAnalysis = async (
     }
 
     sendSuccess(res, {
-      message: 'AI analysis completed successfully',
+      message: "AI analysis completed successfully",
       analysis,
     });
   } catch (error) {
@@ -108,11 +108,11 @@ export const processDocument = async (
     const { imageDataUrl } = req.body;
 
     if (!imageDataUrl) {
-      sendError(res, 'imageDataUrl is required', 400, 'VALIDATION_ERROR');
+      sendError(res, "imageDataUrl is required", 400, "VALIDATION_ERROR");
       return;
     }
 
-    logger.info('Processing document image with AI');
+    logger.info("Processing document image with AI");
     const result = await aiService.processDocumentImage(imageDataUrl);
 
     // Transform formSuggestions array into a flat data object for easier frontend mapping
@@ -151,12 +151,23 @@ export const processDocumentsBatch = async (
   try {
     const { imageDataUrls } = req.body;
 
-    if (!imageDataUrls || !Array.isArray(imageDataUrls) || imageDataUrls.length === 0) {
-      sendError(res, 'imageDataUrls array is required and must not be empty', 400, 'VALIDATION_ERROR');
+    if (
+      !imageDataUrls ||
+      !Array.isArray(imageDataUrls) ||
+      imageDataUrls.length === 0
+    ) {
+      sendError(
+        res,
+        "imageDataUrls array is required and must not be empty",
+        400,
+        "VALIDATION_ERROR"
+      );
       return;
     }
 
-    logger.info(`Processing ${imageDataUrls.length} document images in batch with AI`);
+    logger.info(
+      `Processing ${imageDataUrls.length} document images in batch with AI`
+    );
     const result = await aiService.processDocumentsBatch(imageDataUrls);
 
     // Transform formSuggestions array into a flat data object for easier frontend mapping
@@ -198,15 +209,15 @@ export const researchRelatedIssues = async (
 
     const complaint = await Complaint.findOne({ id }).lean();
     if (!complaint) {
-      throw new NotFoundError('Complaint');
+      throw new NotFoundError("Complaint");
     }
 
     logger.info(`Researching related issues for complaint: ${id}`);
     const research = await aiService.researchRelatedIssues(
       complaint.title,
       complaint.category,
-      complaint.location || '',
-      depth || 'detailed'
+      complaint.location || "",
+      depth || "detailed"
     );
 
     // Save research data to complaint
@@ -238,14 +249,14 @@ export const findComplaintOfficers = async (
 
     const complaint = await Complaint.findOne({ id }).lean();
     if (!complaint) {
-      throw new NotFoundError('Complaint');
+      throw new NotFoundError("Complaint");
     }
 
     logger.info(`Finding officers for complaint: ${id}`);
     const officers = await aiService.findComplaintOfficers(
       complaint.title,
       complaint.description,
-      complaint.location || ''
+      complaint.location || ""
     );
 
     // Save officers to complaint
@@ -278,7 +289,7 @@ export const draftComplaintLetter = async (
 
     const complaint = await Complaint.findOne({ id }).lean();
     if (!complaint) {
-      throw new NotFoundError('Complaint');
+      throw new NotFoundError("Complaint");
     }
 
     logger.info(`Drafting letter for complaint: ${id}`);
@@ -290,21 +301,32 @@ export const draftComplaintLetter = async (
     const letterResponse = await aiService.draftComplaintLetter(
       complaint.title,
       complaint.description,
-      complaint.location || '',
+      complaint.location || "",
       complaint.category,
       complaint.contact_name,
       selectedOfficer as any,
       complaint.research_data
     );
 
-    // Save letter to complaint
-    await Complaint.updateOne(
-      { id },
-      {
-        drafted_letter: letterResponse.letter,
-        updated_at: new Date(),
-      }
-    );
+    // Prepare update object with letter and selected officer
+    const updateData: any = {
+      drafted_letter: letterResponse.letter,
+      updated_at: new Date(),
+    };
+
+    // Save selected officer if provided (only when letter is drafted to their email)
+    if (selectedOfficer) {
+      updateData.selected_officer = {
+        name: selectedOfficer.name,
+        designation: selectedOfficer.designation,
+        office_address: selectedOfficer.office_address,
+        phone: selectedOfficer.phone,
+        email: selectedOfficer.email,
+      };
+    }
+
+    // Save letter and selected officer to complaint
+    await Complaint.updateOne({ id }, updateData);
 
     sendSuccess(res, letterResponse);
   } catch (error) {
@@ -326,7 +348,7 @@ export const generateComplaintActions = async (
 
     const complaint = await Complaint.findOne({ id }).lean();
     if (!complaint) {
-      throw new NotFoundError('Complaint');
+      throw new NotFoundError("Complaint");
     }
 
     logger.info(`Generating actions for complaint: ${id}`);
@@ -334,7 +356,7 @@ export const generateComplaintActions = async (
       complaint.title,
       complaint.description,
       complaint.category,
-      complaint.location || ''
+      complaint.location || ""
     );
 
     sendSuccess(res, actions);
@@ -394,7 +416,7 @@ export const fetchStepInstructions = async (
     const instructions = await aiService.fetchStepInstructions(stepId);
 
     if (!instructions) {
-      throw new NotFoundError('Step Instructions');
+      throw new NotFoundError("Step Instructions");
     }
 
     sendSuccess(res, instructions);
@@ -419,7 +441,7 @@ export const regenerateAIAnalysis = async (
     // Verify complaint exists
     const complaint = await Complaint.findOne({ id }).lean();
     if (!complaint) {
-      throw new NotFoundError('Complaint');
+      throw new NotFoundError("Complaint");
     }
 
     // Clear existing AI data
@@ -432,7 +454,7 @@ export const regenerateAIAnalysis = async (
       complaint.title,
       complaint.description,
       complaint.category,
-      complaint.location || '',
+      complaint.location || "",
       complaint.priority
     );
 
@@ -456,7 +478,7 @@ export const regenerateAIAnalysis = async (
     // Save resolution steps
     if (analysis.resolution_steps && analysis.resolution_steps.length > 0) {
       const steps = analysis.resolution_steps.map((step) => ({
-        id: require('uuid').v4(),
+        id: require("uuid").v4(),
         complaint_id: id,
         step_number: step.step_number,
         title: step.title,
@@ -464,7 +486,7 @@ export const regenerateAIAnalysis = async (
         estimated_cost: step.estimated_cost,
         estimated_days: step.estimated_days,
         department: step.department,
-        status: 'pending',
+        status: "pending",
         created_at: new Date(),
         updated_at: new Date(),
       }));
@@ -474,11 +496,10 @@ export const regenerateAIAnalysis = async (
     }
 
     sendSuccess(res, {
-      message: 'AI analysis regenerated successfully',
+      message: "AI analysis regenerated successfully",
       analysis,
     });
   } catch (error) {
     next(error);
   }
 };
-

@@ -214,10 +214,14 @@ const MapRenderHeatMap: React.FC<MapRenderHeatMapProps> = ({
   >(null);
   const [hoveredDistrict, setHoveredDistrict] = useState<string | null>(null);
   const [hasInitialFit, setHasInitialFit] = useState(false);
-  
+
   // Hover tooltip state
-  const [hoverTooltipData, setHoverTooltipData] = useState<DistrictHoverData | null>(null);
-  const [hoverTooltipPosition, setHoverTooltipPosition] = useState<{ x: number; y: number } | null>(null);
+  const [hoverTooltipData, setHoverTooltipData] =
+    useState<DistrictHoverData | null>(null);
+  const [hoverTooltipPosition, setHoverTooltipPosition] = useState<{
+    x: number;
+    y: number;
+  } | null>(null);
   const [loadingHoverData, setLoadingHoverData] = useState(false);
   const hoverTimeoutRef = useRef<NodeJS.Timeout | null>(null);
 
@@ -321,17 +325,17 @@ const MapRenderHeatMap: React.FC<MapRenderHeatMapProps> = ({
           ? Math.log1p(safeValue) / logMax
           : (safeValue - minValue) / (maxValue - minValue);
 
-      // Heat map color scale: Light Red -> Red -> Dark Red
+      // Heat map color scale: Deep Orange -> Deep Red (darkened colors)
       if (normalized < 0.2) {
-        return "#FCA5A5"; // Light red
+        return "#FCA5A5"; // Deep orange
       } else if (normalized < 0.4) {
-        return "#F87171"; // Red
+        return "#F87171"; // Darker orange
       } else if (normalized < 0.6) {
-        return "#EF4444"; // Medium red
+        return "#DC2626"; // Deep red
       } else if (normalized < 0.8) {
-        return "#DC2626"; // Dark red
+        return "#B91C1C"; // Darker red
       } else {
-        return "#991B1B"; // Very dark red
+        return "#7F1D1D"; // Very dark red
       }
     },
     [minValue, maxValue, valueProperty]
@@ -758,11 +762,11 @@ const MapRenderHeatMap: React.FC<MapRenderHeatMapProps> = ({
       complaints: {
         colors: [
           "rgba(255,255,255,0)", // Transparent
-          "#FEF3C7", // Very light yellow
-          "#FCD34D", // Yellow
-          "#F97316", // Orange
-          "#DC2626", // Red
-          "#991B1B", // Dark red
+          "#F97316", // Deep orange
+          "#EA580C", // Darker orange
+          "#DC2626", // Deep red
+          "#B91C1C", // Darker red
+          "#7F1D1D", // Very dark red
         ],
         stops: [0, 0.2, 0.4, 0.6, 0.8, 1],
       },
@@ -896,11 +900,11 @@ const MapRenderHeatMap: React.FC<MapRenderHeatMapProps> = ({
             0,
             "#10B981", // Green for low
             5,
-            "#ff671f", // Orange for medium
+            "#EA580C", // Darker orange for medium
             10,
-            "#ff671f", // Orange for high
+            "#DC2626", // Deep red for high
             20,
-            "#DC2626", // Red for very high
+            "#B91C1C", // Darker red for very high
           ] as any,
           "circle-stroke-width": 2,
           "circle-stroke-color": "#FFFFFF",
@@ -984,21 +988,24 @@ const MapRenderHeatMap: React.FC<MapRenderHeatMapProps> = ({
           if (hoveredDistrict !== districtName) {
             setHoveredDistrict(districtName);
             mapRef.current.getCanvas().style.cursor = "pointer";
-            
+
             // Set tooltip position
             setHoverTooltipPosition({ x: event.point.x, y: event.point.y });
-            
+
             // Clear any existing timeout
             if (hoverTimeoutRef.current) {
               clearTimeout(hoverTimeoutRef.current);
             }
-            
+
             // Debounce API call - only fetch after 300ms of hovering
             hoverTimeoutRef.current = setTimeout(async () => {
               setLoadingHoverData(true);
               try {
-                const districtCode = feature.properties?.districtCode || districtName;
-                const hoverData = await geoService.getDistrictHoverData(districtCode);
+                const districtCode =
+                  feature.properties?.districtCode || districtName;
+                const hoverData = await geoService.getDistrictHoverData(
+                  districtCode
+                );
                 setHoverTooltipData(hoverData);
               } catch (error) {
                 console.error("Failed to fetch hover data:", error);
@@ -1018,7 +1025,7 @@ const MapRenderHeatMap: React.FC<MapRenderHeatMapProps> = ({
             setHoverTooltipData(null);
             setHoverTooltipPosition(null);
             mapRef.current.getCanvas().style.cursor = "";
-            
+
             if (hoverTimeoutRef.current) {
               clearTimeout(hoverTimeoutRef.current);
             }
@@ -1031,7 +1038,7 @@ const MapRenderHeatMap: React.FC<MapRenderHeatMapProps> = ({
           setHoverTooltipData(null);
           setHoverTooltipPosition(null);
           mapRef.current.getCanvas().style.cursor = "";
-          
+
           if (hoverTimeoutRef.current) {
             clearTimeout(hoverTimeoutRef.current);
           }
@@ -1080,13 +1087,40 @@ const MapRenderHeatMap: React.FC<MapRenderHeatMapProps> = ({
     );
   }
 
+  // Minimal map style with white background (no base map tiles)
+  const whiteBackgroundStyle = useMemo(
+    () => ({
+      version: 8 as const,
+      sources: {},
+      layers: [
+        {
+          id: "background",
+          type: "background" as const,
+          paint: {
+            "background-color": "#FFFFFF",
+          },
+        },
+      ],
+      glyphs: "https://demotiles.maplibre.org/font/{fontstack}/{range}.pbf",
+    }),
+    []
+  );
+
   return (
     <div
       className={className}
       style={{
         width: "100%",
         height: "100%",
+        maxWidth: "100%",
+        maxHeight: "100%",
+        minWidth: 0,
+        minHeight: 0,
         position: "relative",
+        margin: 0,
+        padding: 0,
+        overflowX: "hidden",
+        overflowY: "hidden",
       }}
     >
       <Map
@@ -1099,8 +1133,17 @@ const MapRenderHeatMap: React.FC<MapRenderHeatMapProps> = ({
         maxBounds={UP_MAX_BOUNDS}
         maxZoom={15}
         minZoom={4.3} // Allow zooming out further to see full state
-        style={{ width: "100%", height: "100%" }}
-        mapStyle="https://demotiles.maplibre.org/style.json"
+        style={{
+          width: "100%",
+          height: "100%",
+          maxWidth: "100%",
+          maxHeight: "100%",
+          minWidth: 0,
+          minHeight: 0,
+          margin: 0,
+          padding: 0,
+        }}
+        mapStyle={whiteBackgroundStyle}
         interactiveLayerIds={[
           "features-fill",
           "poi-points",
@@ -1287,7 +1330,7 @@ const MapRenderHeatMap: React.FC<MapRenderHeatMapProps> = ({
           </Popup>
         )}
       </Map>
-      
+
       {/* Hover Tooltip */}
       {hoveredDistrict && hoverTooltipPosition && (
         <DistrictHoverTooltip

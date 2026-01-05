@@ -179,6 +179,23 @@ export interface Complaint {
   closingProof?: string; // URL to closing proof document
   isExtended?: boolean; // Whether time boundary was extended
   officerFeedback?: string; // Officer's feedback
+  drafted_letter?: {
+    // Drafted letter data
+    from?: string;
+    to?: string;
+    date?: string;
+    subject?: string;
+    body?: string;
+    attachments?: string[];
+  };
+  selected_officer?: {
+    // Selected officer for whom the letter is drafted
+    name?: string;
+    designation: string;
+    office_address: string;
+    phone: string;
+    email: string;
+  };
   createdAt: string;
   updatedAt: string;
 }

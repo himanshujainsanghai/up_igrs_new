@@ -254,23 +254,42 @@ export async function convertPdfToImages(
         const blob = await new Promise<Blob>((resolve, reject) => {
           canvas.toBlob(
             (blob) => {
-              if (blob) {
-                resolve(blob);
-              } else {
+              if (!blob) {
                 reject(new Error(`Failed to convert page ${pageNum} to blob`));
+                return;
               }
+              
+              // Ensure blob has the correct MIME type
+              // If blob type doesn't match format, create a new blob with correct type
+              let correctedBlob = blob;
+              if (blob.type !== format) {
+                // Create a new blob with the correct MIME type
+                correctedBlob = new Blob([blob], { type: format });
+              }
+              
+              resolve(correctedBlob);
             },
             format,
             format === "image/jpeg" ? quality : undefined
           );
         });
 
-        // Convert blob to File
+        // Validate blob has correct MIME type
+        if (!blob.type || !blob.type.startsWith('image/')) {
+          throw new Error(`Invalid blob MIME type for page ${pageNum}: ${blob.type || 'unknown'}`);
+        }
+
+        // Convert blob to File - use blob.type to ensure consistency
         const fileName = `${baseFileName}_page_${pageNum}.${fileExtension}`;
         const imageFile = new File([blob], fileName, {
-          type: format,
+          type: blob.type || format, // Use blob's actual type, fallback to format
           lastModified: Date.now(),
         });
+
+        // Final validation: ensure File has valid image MIME type
+        if (!imageFile.type.startsWith('image/')) {
+          throw new Error(`Invalid image MIME type for page ${pageNum}: ${imageFile.type}`);
+        }
 
         imageFiles.push(imageFile);
       } catch (error) {

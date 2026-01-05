@@ -7,6 +7,7 @@ import authSlice from './slices/auth.slice';
 import complaintsSlice from './slices/complaints.slice';
 import meetingsSlice from './slices/meetings.slice';
 import uiSlice from './slices/ui.slice';
+import executivesSlice from './slices/executives.slice';
 
 export const store = configureStore({
   reducer: {
@@ -14,6 +15,7 @@ export const store = configureStore({
     complaints: complaintsSlice,
     meetings: meetingsSlice,
     ui: uiSlice,
+    executives: executivesSlice,
   },
   middleware: (getDefaultMiddleware) =>
     getDefaultMiddleware({

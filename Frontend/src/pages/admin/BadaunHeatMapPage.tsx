@@ -41,7 +41,7 @@ import {
   type DistrictData,
 } from "@/services/district.service";
 import { demographicsService } from "@/services/demographics.service";
-import { testService } from "@/services/test.service";
+import { complaintsService } from "@/services/complaints.service";
 import {
   createComplaintHeatmapData,
   createPopulationHeatmapData,
@@ -278,18 +278,13 @@ const BadaunHeatMapPage: React.FC = () => {
 
         // Fetch total complaints for Badaun
         try {
-          // Use test endpoint which doesn't require auth
-          const allComplaints = await testService.getAllComplaints();
-          console.log("Complaints API response:", allComplaints);
-
-          // Filter for Badaun district
-          const badaunComplaints = allComplaints.filter(
-            (c: any) =>
-              c.district_name === "Budaun" || c.district_name === "Badaun"
-          );
+          // Use proper Badaun complaints endpoint (server-side filtered)
+          const badaunComplaints =
+            await complaintsService.getBadaunComplaints();
+          console.log("Badaun Complaints API response:", badaunComplaints);
 
           console.log(
-            `Found ${badaunComplaints.length} complaints for Badaun out of ${allComplaints.length} total`
+            `Found ${badaunComplaints.length} complaints for Badaun district`
           );
           setAllComplaints(badaunComplaints);
           setFilteredComplaints(badaunComplaints);
@@ -305,7 +300,7 @@ const BadaunHeatMapPage: React.FC = () => {
           );
           setComplaintsByStatus(byStatus);
         } catch (err) {
-          console.error("Error loading complaints count:", err);
+          console.error("Error loading Badaun complaints:", err);
         }
 
         // Load ADHQ data from backend API
@@ -1663,9 +1658,9 @@ const BadaunHeatMapPage: React.FC = () => {
                   navigate("/admin/dashboard");
                 }
               }}
-              className="hover:bg-orange-50"
+              className=""
             >
-              <ArrowLeft className="w-5 h-5" />
+              <ArrowLeft className="w-5 h-5 hover:bg-orange-600 hover:text-white rounded-full" />
             </Button>
             <div className="flex-1">
               <h1 className="text-xl font-bold text-foreground">
@@ -1687,7 +1682,7 @@ const BadaunHeatMapPage: React.FC = () => {
                   setSearchParams({});
                   setFilters((prev) => ({ ...prev, subdistrict: "" }));
                 }}
-                className="hover:bg-orange-50 border-orange-300 mr-2"
+                className="bg-orange-600 text-white hover:bg-orange-400 mr-2"
               >
                 <ChevronLeft className="w-4 h-4 mr-2" />
                 Back to Badaun
@@ -1697,7 +1692,7 @@ const BadaunHeatMapPage: React.FC = () => {
               variant="ghost"
               size="sm"
               onClick={() => navigate("/admin/dashboard")}
-              className="bg-orange-50 text-black "
+              className="bg-orange-600 text-white hover:bg-orange-400"
             >
               <Home className="w-4 h-4 mr-2" />
               Back to UP Map
@@ -2071,7 +2066,7 @@ const BadaunHeatMapPage: React.FC = () => {
                 )}
               </Card>
 
-{/* Map Layers card removed - now integrated into Map Legend */}
+              {/* Map Layers card removed - now integrated into Map Legend */}
 
               {/* Heatmap Controls */}
               <Card className="border-orange-200 bg-orange-50/30">
@@ -2352,7 +2347,8 @@ const BadaunHeatMapPage: React.FC = () => {
                     onToggleTowns: () => setShowTowns(!showTowns),
                     onToggleWards: () => setShowWards(!showWards),
                     onToggleAdhq: () => setShowAdhq(!showAdhq),
-                    onToggleIndiaAssets: () => setShowIndiaAssets(!showIndiaAssets),
+                    onToggleIndiaAssets: () =>
+                      setShowIndiaAssets(!showIndiaAssets),
                   }}
                 />
               </div>

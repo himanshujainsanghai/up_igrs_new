@@ -156,7 +156,7 @@ const Home: React.FC = () => {
               <div className="relative">
                 <div className="w-80 h-80 lg:w-[400px] lg:h-[400px] xl:w-[450px] xl:h-[450px] rounded-full bg-white/20 backdrop-blur-sm border-4 border-white/30 overflow-hidden shadow-2xl">
                   <img
-                    src="https://raw.githubusercontent.com/himanshujainsanghai/Images/refs/heads/main/yogi_ji(1).jpg"
+                    src="https://raw.githubusercontent.com/himanshujainsanghai/Images/refs/heads/main/ASHN8681.JPG"
                     alt="Official"
                     className="w-full h-full object-cover"
                   />

@@ -12,6 +12,7 @@ const router = Router();
 
 // Public routes (no authentication required)
 router.get("/", complaintsController.getAllComplaints); // Get all complaints
+router.get("/badaun", complaintsController.getBadaunComplaints); // Get Badaun complaints (must be before /:id)
 router.get("/executives", complaintsController.getExecutives); // Get executives (must be before /:id)
 router.get("/statistics", complaintsController.getStatistics); // Get statistics (must be before /:id)
 router.get("/track/phone/:phoneNumber", complaintsController.trackByPhone); // Track by phone (must be before /:id)
@@ -44,6 +45,13 @@ router.post(
   authorize("admin"),
   complaintsController.assignOfficer
 ); // Assign complaint to officer (intelligently creates new or uses existing) (admin only)
+
+router.post(
+  "/:id/assign-and-send-email",
+  authenticate,
+  authorize("admin"),
+  complaintsController.assignOfficerAndSendEmail
+); // Unified: Assign complaint to officer and send email with drafted letter (admin only)
 
 router.put(
   "/:id/unassign",

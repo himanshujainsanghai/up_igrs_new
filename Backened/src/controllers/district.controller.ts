@@ -27,9 +27,9 @@ export const getBadaunDistrict = async (
       return;
     }
 
-    // Get complaint statistics
+    // Get complaint statistics - query for both "Badaun" and "Budaun" to match heatmap behavior
     const allComplaints = await Complaint.find({
-      district_name: "Budaun",
+      $or: [{ district_name: "Badaun" }, { district_name: "Budaun" }],
     }).lean();
 
     const complaintStats = {

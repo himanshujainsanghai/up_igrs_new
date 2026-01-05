@@ -44,6 +44,23 @@ export const complaintsService = {
   },
 
   /**
+   * Get Badaun district complaints
+   * GET /api/v1/complaints/badaun
+   * Returns all complaints for Badaun district (both "Badaun" and "Budaun" spellings)
+   */
+  async getBadaunComplaints(): Promise<Complaint[]> {
+    const response = await apiClient.get<
+      ApiResponse<{ count: number; complaints: Complaint[] }>
+    >("/complaints/badaun");
+
+    if (response.success && response.data) {
+      return response.data.complaints || [];
+    }
+
+    return [];
+  },
+
+  /**
    * Get complaint by ID
    * GET /api/v1/complaints/:id
    */
@@ -477,5 +494,66 @@ export const complaintsService = {
       return response.data;
     }
     throw new Error(response.error?.message || "Failed to assign officer");
+  },
+
+  /**
+   * Unified: Assign complaint to officer and send email with drafted letter
+   * POST /api/v1/complaints/:id/assign-and-send-email
+   * If new officer account is created, includes email and password in the email
+   */
+  async assignOfficerAndSendEmail(
+    id: string,
+    executive: any
+  ): Promise<{
+    assignment: {
+      complaint: Complaint;
+      officer: any;
+      user?: {
+        id: string;
+        email: string;
+        name: string;
+        password?: string;
+      };
+      isNewOfficer: boolean;
+    };
+    email: {
+      success: boolean;
+      messageId?: string;
+      recipient?: string;
+      subject?: string;
+      sentAt?: string;
+      error?: string;
+    };
+  }> {
+    const response = await apiClient.post<
+      ApiResponse<{
+        assignment: {
+          complaint: Complaint;
+          officer: any;
+          user?: {
+            id: string;
+            email: string;
+            name: string;
+            password?: string;
+          };
+          isNewOfficer: boolean;
+        };
+        email: {
+          success: boolean;
+          messageId?: string;
+          recipient?: string;
+          subject?: string;
+          sentAt?: string;
+          error?: string;
+        };
+      }>
+    >(`/complaints/${id}/assign-and-send-email`, { executive });
+
+    if (response.success && response.data) {
+      return response.data;
+    }
+    throw new Error(
+      response.error?.message || "Failed to assign officer and send email"
+    );
   },
 };

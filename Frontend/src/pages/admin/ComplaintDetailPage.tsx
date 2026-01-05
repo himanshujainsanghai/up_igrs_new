@@ -90,6 +90,7 @@ import {
 import { complaintsService } from "@/services/complaints.service";
 import { Complaint, ComplaintNote, ComplaintDocument } from "@/types";
 import { toast } from "sonner";
+import ComplaintTimeline from "@/components/complaints/ComplaintTimeline";
 import {
   notesUtils,
   documentsUtils,
@@ -98,10 +99,24 @@ import {
   actionsUtils,
   detailsUtils,
 } from "./utils/complaintDetailUtils";
+import { useAppDispatch, useAppSelector } from "@/store/hooks";
+import {
+  fetchExecutives,
+  selectFlattenedExecutives,
+  selectExecutivesLoading,
+  selectExecutivesError,
+} from "@/store/slices/executives.slice";
 
 const ComplaintDetailPage: React.FC = () => {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
+  const dispatch = useAppDispatch();
+
+  // Redux state for executives
+  const flattenedExecutives = useAppSelector(selectFlattenedExecutives);
+  const executivesLoading = useAppSelector(selectExecutivesLoading);
+  const executivesError = useAppSelector(selectExecutivesError);
+
   const [complaint, setComplaint] = useState<Complaint | null>(null);
   const [loading, setLoading] = useState(true);
   const [activeTab, setActiveTab] = useState("details");
@@ -185,16 +200,17 @@ const ComplaintDetailPage: React.FC = () => {
     }
   }, [id]);
 
-  // Load executives when Actions tab is active
+  // Sync executives from Redux store when it changes
   useEffect(() => {
-    if (
-      activeTab === "actions" &&
-      assignmentExecutives.length === 0 &&
-      !loadingAssignmentExecutives
-    ) {
-      loadAssignmentExecutives();
+    if (flattenedExecutives.length > 0) {
+      // Sync executives from Redux to local state for draft letter
+      setExecutives(flattenedExecutives);
+      // Also sync to assignment executives
+      setAssignmentExecutives(flattenedExecutives);
     }
-  }, [activeTab]);
+  }, [flattenedExecutives]);
+
+  // Note: Assignment executives are no longer loaded - we use selected_officer directly
 
   const loadEmailHistory = async () => {
     if (!id) return;
@@ -248,6 +264,12 @@ const ComplaintDetailPage: React.FC = () => {
       if (savedActions.length > 0) {
         setActions(savedActions);
         console.log("Loaded saved actions from AI resolution steps");
+      }
+
+      // Note: selected_officer is only for display in the header
+      // It should NOT be added to executives list - executives come only from API/context
+      if ((data as any).selected_officer) {
+        console.log("Loaded selected officer:", (data as any).selected_officer);
       }
     } catch (error: any) {
       console.error("Error loading complaint:", error);
@@ -330,12 +352,40 @@ const ComplaintDetailPage: React.FC = () => {
     if (!id) return;
     try {
       setStage1Loading(true);
-      const executivesData = await draftLetterUtils.findOfficers(id);
-      setExecutives(executivesData);
-      // Default select the 0th index executive
-      setSelectedExecutiveIndex(0);
+
+      // First, check if we have executives in Redux context (from API)
+      if (flattenedExecutives.length > 0) {
+        // Use cached executives from Redux context (API data only, no selected_officer mixing)
+        setExecutives(flattenedExecutives);
+        setSelectedExecutiveIndex(0);
+        toast.success(
+          `Loaded ${flattenedExecutives.length} executives from cache`
+        );
+        setStage1Loading(false);
+        return;
+      }
+
+      // If context is empty, fetch from API and store in context
+      const result = await dispatch(fetchExecutives(false));
+
+      if (fetchExecutives.fulfilled.match(result)) {
+        // Use executives from API (stored in context) - pure API data only
+        const executivesData = result.payload.flattenedExecutives;
+        setExecutives(executivesData);
+        setSelectedExecutiveIndex(0);
+
+        if (result.payload.fromCache) {
+          toast.success(
+            `Loaded ${executivesData.length} executives from cache`
+          );
+        } else {
+          toast.success(`Found ${executivesData.length} executives`);
+        }
+      } else {
+        throw new Error(executivesError || "Failed to fetch executives");
+      }
     } catch (error: any) {
-      // Error already handled in utility function
+      toast.error(error.message || "Failed to fetch executives");
     } finally {
       setStage1Loading(false);
     }
@@ -446,22 +496,9 @@ const ComplaintDetailPage: React.FC = () => {
     }
   };
 
-  const handleGenerateActions = async () => {
-    if (!id) return;
-    try {
-      setStage3Loading(true);
-      const actionsData = await actionsUtils.generateActions(id);
-      setActions(actionsData);
-      setActiveTab("actions");
-
-      // TODO: Save actions to backend (convert to AIResolutionStep or save to complaint)
-      // For now, actions are only stored in component state
-      // Backend doesn't automatically save actions - they need to be converted to AIResolutionStep
-    } catch (error: any) {
-      // Error already handled in utility function
-    } finally {
-      setStage3Loading(false);
-    }
+  const handleProceedToActions = () => {
+    // Simply redirect to Actions tab - no AI generation
+    setActiveTab("actions");
   };
 
   const getActionIcon = (type: string) => {
@@ -581,56 +618,112 @@ const ComplaintDetailPage: React.FC = () => {
     if (!id) return;
     try {
       setLoadingAssignmentExecutives(true);
-      const executivesData = await draftLetterUtils.findOfficers(id);
-      setAssignmentExecutives(executivesData);
-      if (executivesData.length > 0) {
-        setSelectedAssignmentExecutiveIndex(0);
+      // Fetch executives from Redux store (will use cache if available)
+      const result = await dispatch(fetchExecutives(false));
+
+      if (fetchExecutives.fulfilled.match(result)) {
+        // Use flattened executives from Redux store
+        const executivesData =
+          flattenedExecutives.length > 0
+            ? flattenedExecutives
+            : result.payload.flattenedExecutives;
+        setAssignmentExecutives(executivesData);
+        if (executivesData.length > 0) {
+          setSelectedAssignmentExecutiveIndex(0);
+        }
+        if (result.payload.fromCache) {
+          toast.success(
+            `Loaded ${executivesData.length} executives from cache`
+          );
+        }
+      } else {
+        throw new Error(executivesError || "Failed to fetch executives");
       }
     } catch (error: any) {
       console.error("Failed to load executives:", error);
-      toast.error("Failed to load executives");
+      toast.error(error.message || "Failed to load executives");
     } finally {
       setLoadingAssignmentExecutives(false);
     }
   };
 
   const handleAssignOfficer = async () => {
-    if (!id || selectedAssignmentExecutiveIndex === -1) return;
+    if (!id) return;
+
+    // Use selected_officer directly
+    const selectedOfficer = (complaint as any)?.selected_officer;
+
+    if (!selectedOfficer) {
+      toast.error("No selected officer found. Please draft a letter first.");
+      return;
+    }
+
     try {
       setAssigningOfficer(true);
-      const selectedExecutive =
-        assignmentExecutives[selectedAssignmentExecutiveIndex];
 
-      if (!selectedExecutive) {
-        toast.error("Please select an officer");
-        return;
-      }
+      // Convert selected_officer to executive format for API
+      const executiveForAPI = {
+        name: selectedOfficer.name || "",
+        designation: selectedOfficer.designation || "",
+        email: selectedOfficer.email || "",
+        phone: selectedOfficer.phone || "",
+        office_address: selectedOfficer.office_address || "",
+        district:
+          complaint?.districtName ||
+          (complaint as any)?.district_name ||
+          "Unknown",
+        category: "general_administration" as const,
+      };
 
-      const result = await complaintsService.assignOfficer(
+      // Use unified endpoint: assign officer and send email
+      const result = await complaintsService.assignOfficerAndSendEmail(
         id,
-        selectedExecutive
+        executiveForAPI
       );
 
-      if (!result || !result.complaint) {
+      if (!result || !result.assignment || !result.assignment.complaint) {
         toast.error("Invalid response from server");
         return;
       }
 
-      setAssignmentResult(result);
+      // Set assignment result (using the assignment part of the response)
+      setAssignmentResult(result.assignment);
       // Reload complaint to ensure we have all updated fields from backend
       await loadComplaint();
+      // Reload email history to show the new email
+      await loadEmailHistory();
 
-      if (result.isNewOfficer && result.user?.password) {
-        toast.success(
-          `Officer assigned successfully! Password: ${result.user.password}`,
-          { duration: 10000 }
-        );
+      // Show success messages based on assignment and email status
+      if (result.assignment.isNewOfficer && result.assignment.user?.password) {
+        if (result.email.success) {
+          toast.success(
+            `Officer assigned and email sent successfully! Password: ${result.assignment.user.password} (sent via email)`,
+            { duration: 10000 }
+          );
+        } else {
+          toast.warning(
+            `Officer assigned but email failed. Password: ${result.assignment.user.password}`,
+            { duration: 10000 }
+          );
+          toast.error(`Email error: ${result.email.error || "Unknown error"}`, {
+            duration: 5000,
+          });
+        }
       } else {
-        toast.success("Complaint assigned to existing officer successfully");
+        if (result.email.success) {
+          toast.success(
+            "Complaint assigned to existing officer and email sent successfully!"
+          );
+        } else {
+          toast.warning("Complaint assigned but email failed to send");
+          toast.error(`Email error: ${result.email.error || "Unknown error"}`, {
+            duration: 5000,
+          });
+        }
       }
     } catch (error: any) {
-      console.error("Failed to assign officer:", error);
-      toast.error(error.message || "Failed to assign officer");
+      console.error("Failed to assign officer and send email:", error);
+      toast.error(error.message || "Failed to assign officer and send email");
     } finally {
       setAssigningOfficer(false);
     }
@@ -873,6 +966,10 @@ const ComplaintDetailPage: React.FC = () => {
               <CardTitle>Complaint Details</CardTitle>
             </CardHeader>
             <CardContent className="space-y-6">
+              {/* Timeline */}
+              <div className="pb-6 border-b border-gray-200">
+                <ComplaintTimeline complaint={complaint} variant="detailed" />
+              </div>
               {/* Basic Information */}
               <div className="space-y-3">
                 <h3 className="text-sm font-semibold text-foreground uppercase tracking-wide border-b pb-2">
@@ -1920,12 +2017,13 @@ const ComplaintDetailPage: React.FC = () => {
             <div className="flex items-center gap-2">
               <div
                 className={`w-10 h-10 rounded-full flex items-center justify-center font-bold text-sm transition-all ${
-                  executives.length > 0
+                  executives.length > 0 || (complaint as any)?.selected_officer
                     ? "bg-gradient-to-br from-green-500 to-emerald-600 text-white shadow-lg"
                     : "bg-gray-200 text-gray-500"
                 }`}
               >
-                {executives.length > 0 ? (
+                {executives.length > 0 ||
+                (complaint as any)?.selected_officer ? (
                   <CheckCircle className="w-5 h-5" />
                 ) : (
                   "1"
@@ -1933,7 +2031,7 @@ const ComplaintDetailPage: React.FC = () => {
               </div>
               <div
                 className={`w-16 h-1 ${
-                  executives.length > 0
+                  executives.length > 0 || (complaint as any)?.selected_officer
                     ? "bg-gradient-to-r from-green-500 to-primary"
                     : "bg-gray-200"
                 }`}
@@ -1944,7 +2042,8 @@ const ComplaintDetailPage: React.FC = () => {
                 className={`w-10 h-10 rounded-full flex items-center justify-center font-bold text-sm transition-all ${
                   letter
                     ? "bg-gradient-to-br from-green-500 to-emerald-600 text-white shadow-lg"
-                    : executives.length > 0
+                    : executives.length > 0 ||
+                      (complaint as any)?.selected_officer
                     ? "bg-primary text-white"
                     : "bg-gray-200 text-gray-500"
                 }`}
@@ -1955,7 +2054,8 @@ const ComplaintDetailPage: React.FC = () => {
                 className={`w-16 h-1 ${
                   letter
                     ? "bg-gradient-to-r from-green-500 to-primary"
-                    : executives.length > 0
+                    : executives.length > 0 ||
+                      (complaint as any)?.selected_officer
                     ? "bg-primary"
                     : "bg-gray-200"
                 }`}
@@ -1977,26 +2077,103 @@ const ComplaintDetailPage: React.FC = () => {
           {/* Stage 1: Find Officers */}
           <Card className="border-orange-200 shadow-lg">
             <CardHeader className="bg-gradient-to-r from-orange-500 via-amber-500 to-orange-600 text-white">
-              <div className="flex items-center justify-between">
-                <div className="flex items-center gap-3">
-                  <div className="p-2 bg-white/20 rounded-lg backdrop-blur-sm">
-                    <Users className="w-6 h-6 text-white" />
+              <div className="space-y-4">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-3">
+                    <div className="p-2 bg-white/20 rounded-lg backdrop-blur-sm">
+                      <Users className="w-6 h-6 text-white" />
+                    </div>
+                    <div>
+                      <CardTitle className="text-2xl text-white">
+                        Stage 1: Find Officers
+                      </CardTitle>
+                      <p className="text-sm text-orange-100 mt-1">
+                        Identify relevant officers to address the complaint
+                      </p>
+                    </div>
                   </div>
-                  <div>
-                    <CardTitle className="text-2xl text-white">
-                      Stage 1: Find Officers
-                    </CardTitle>
-                    <p className="text-sm text-orange-100 mt-1">
-                      Identify relevant officers to address the complaint
-                    </p>
-                  </div>
+                  {(executives.length > 0 ||
+                    (complaint as any)?.selected_officer) && (
+                    <div className="flex items-center gap-2 bg-white/20 px-3 py-1.5 rounded-full backdrop-blur-sm">
+                      <CheckCircle className="w-5 h-5 text-white" />
+                      <span className="text-sm font-medium text-white">
+                        {(complaint as any)?.selected_officer
+                          ? "Officer Selected"
+                          : "Completed"}
+                      </span>
+                    </div>
+                  )}
                 </div>
-                {executives.length > 0 && (
-                  <div className="flex items-center gap-2 bg-white/20 px-3 py-1.5 rounded-full backdrop-blur-sm">
-                    <CheckCircle className="w-5 h-5 text-white" />
-                    <span className="text-sm font-medium text-white">
-                      Completed
-                    </span>
+
+                {/* Selected Officer Details in Header */}
+                {(complaint as any)?.selected_officer && (
+                  <div className="mt-4 pt-4 border-t border-white/20">
+                    <div className="flex items-center gap-2 mb-3">
+                      <UserCheck className="w-4 h-4 text-white/90" />
+                      <span className="text-xs font-semibold text-white/90 uppercase tracking-wide">
+                        Selected Officer Details:
+                      </span>
+                    </div>
+                    <div className="bg-white/10 backdrop-blur-sm rounded-lg p-4 border border-white/20">
+                      <div className="flex items-start gap-4">
+                        <div className="w-12 h-12 rounded-full bg-white/20 backdrop-blur-sm flex items-center justify-center text-white font-bold text-lg flex-shrink-0 border-2 border-white/30">
+                          {(complaint as any).selected_officer.name
+                            ?.charAt(0)
+                            .toUpperCase() || "O"}
+                        </div>
+                        <div className="flex-1 min-w-0">
+                          <div className="mb-3">
+                            <h3 className="text-lg font-bold text-white mb-1">
+                              {(complaint as any).selected_officer.name ||
+                                "Unknown"}
+                            </h3>
+                            <p className="text-sm font-medium text-white/90">
+                              {(complaint as any).selected_officer.designation}
+                            </p>
+                          </div>
+                          <div className="flex flex-wrap items-center gap-4 text-sm">
+                            {(complaint as any).selected_officer.email && (
+                              <div className="flex items-center gap-2">
+                                <Mail className="w-4 h-4 text-white/80" />
+                                <a
+                                  href={`mailto:${
+                                    (complaint as any).selected_officer.email
+                                  }`}
+                                  className="text-white/90 hover:text-white hover:underline break-all"
+                                >
+                                  {(complaint as any).selected_officer.email}
+                                </a>
+                              </div>
+                            )}
+                            {(complaint as any).selected_officer.phone && (
+                              <div className="flex items-center gap-2">
+                                <Phone className="w-4 h-4 text-white/80" />
+                                <a
+                                  href={`tel:${
+                                    (complaint as any).selected_officer.phone
+                                  }`}
+                                  className="text-white/90 hover:text-white hover:underline"
+                                >
+                                  {(complaint as any).selected_officer.phone}
+                                </a>
+                              </div>
+                            )}
+                            {(complaint as any).selected_officer
+                              .office_address && (
+                              <div className="flex items-start gap-2 w-full">
+                                <MapPin className="w-4 h-4 text-white/80 mt-0.5 flex-shrink-0" />
+                                <span className="text-white/90 text-xs">
+                                  {
+                                    (complaint as any).selected_officer
+                                      .office_address
+                                  }
+                                </span>
+                              </div>
+                            )}
+                          </div>
+                        </div>
+                      </div>
+                    </div>
                   </div>
                 )}
               </div>
@@ -2024,13 +2201,13 @@ const ComplaintDetailPage: React.FC = () => {
                       Select Executive to Address ({executives.length}{" "}
                       available):
                     </Label>
-                    <div className="relative">
+                    <div className="relative w-full overflow-hidden">
                       {/* Left Scroll Button */}
                       {canScrollLeft && (
                         <Button
                           variant="outline"
                           size="icon"
-                          className="absolute left-0 top-1/2 -translate-y-1/2 z-10 bg-white shadow-lg "
+                          className="absolute left-2 top-1/2 -translate-y-1/2 z-10 bg-white shadow-lg hover:bg-gray-50"
                           onClick={() => scrollOfficers("left")}
                         >
                           <ChevronLeft className="w-5 h-5" />
@@ -2041,7 +2218,7 @@ const ComplaintDetailPage: React.FC = () => {
                         <Button
                           variant="outline"
                           size="icon"
-                          className="absolute right-0 top-1/2 -translate-y-1/2 z-10 bg-white shadow-lg "
+                          className="absolute right-2 top-1/2 -translate-y-1/2 z-10 bg-white shadow-lg hover:bg-gray-50"
                           onClick={() => scrollOfficers("right")}
                         >
                           <ChevronRight className="w-5 h-5" />
@@ -2051,7 +2228,8 @@ const ComplaintDetailPage: React.FC = () => {
                       <div
                         ref={officersScrollRef}
                         onScroll={checkScrollButtons}
-                        className="overflow-x-auto scrollbar-hide pb-4"
+                        className="overflow-x-auto scrollbar-hide pb-4 px-12"
+                        style={{ scrollBehavior: "smooth" }}
                       >
                         <RadioGroup
                           value={selectedExecutiveIndex.toString()}
@@ -2146,19 +2324,35 @@ const ComplaintDetailPage: React.FC = () => {
                     <Users className="w-10 h-10 text-blue-400" />
                   </div>
                   <p className="text-lg font-semibold text-foreground mb-2">
-                    Ready to Find Officers
+                    {flattenedExecutives.length === 0
+                      ? "Ready to Find Officers"
+                      : "No Executives Available"}
                   </p>
                   <p className="text-sm text-muted-foreground mb-6">
-                    Click the button below to search for relevant officers
+                    {flattenedExecutives.length === 0
+                      ? "Click the button below to fetch officers from the API and store them in context"
+                      : "Executives have been loaded but none are available for this complaint"}
                   </p>
-                  <Button
-                    onClick={handleFindOfficers}
-                    size="lg"
-                    className="bg-primary hover:bg-primary/90"
-                  >
-                    <Users className="w-4 h-4 mr-2" />
-                    Find Officers and Draft Letter
-                  </Button>
+                  {flattenedExecutives.length === 0 && (
+                    <Button
+                      onClick={handleFindOfficers}
+                      disabled={stage1Loading}
+                      size="lg"
+                      className="bg-primary hover:bg-primary/90"
+                    >
+                      {stage1Loading ? (
+                        <>
+                          <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                          Fetching Officers...
+                        </>
+                      ) : (
+                        <>
+                          <Users className="w-4 h-4 mr-2" />
+                          Find Officers and Draft Letter
+                        </>
+                      )}
+                    </Button>
+                  )}
                 </div>
               )}
             </CardContent>
@@ -2336,60 +2530,31 @@ const ComplaintDetailPage: React.FC = () => {
             </Card>
           )}
 
-          {/* Stage 3: Generate Actions */}
+          {/* Stage 3: Proceed to Actions Panel */}
           {letter && (
             <Card>
               <CardHeader className="flex flex-row items-center justify-between">
                 <div className="flex items-center gap-3">
-                  <div
-                    className={`w-6 h-6 rounded-full flex items-center justify-center text-xs font-bold ${
-                      actions
-                        ? "bg-green-500 text-white"
-                        : "bg-gray-300 text-gray-600"
-                    }`}
-                  >
+                  <div className="w-6 h-6 rounded-full flex items-center justify-center text-xs font-bold bg-primary text-white">
                     3
                   </div>
-                  <CardTitle>Stage 3: Generate Action Plan</CardTitle>
+                  <CardTitle>Stage 3: Proceed to Actions Panel</CardTitle>
                 </div>
-                {actions && <CheckCircle className="w-5 h-5 text-green-500" />}
               </CardHeader>
               <CardContent className="border-t">
-                {stage3Loading ? (
-                  <div className="flex items-center justify-center gap-2 py-10 text-primary">
-                    <Loader2 className="w-5 h-5 animate-spin" />
-                    <span>Generating action plan...</span>
-                  </div>
-                ) : actions ? (
-                  <div className="space-y-3">
-                    <p className="text-sm text-muted-foreground">
-                      Action plan generated. View in Actions tab.
-                    </p>
-                    <Button
-                      onClick={() => setActiveTab("actions")}
-                      className="w-full"
-                      variant="outline"
-                    >
-                      <Settings className="w-4 h-4 mr-2" />
-                      Go to Actions
-                    </Button>
-                  </div>
-                ) : (
+                <div className="space-y-3">
+                  <p className="text-sm text-muted-foreground">
+                    Continue to the Actions tab to assign officers and manage
+                    complaint resolution.
+                  </p>
                   <Button
-                    onClick={handleGenerateActions}
-                    disabled={stage3Loading}
-                    className="w-full"
+                    onClick={handleProceedToActions}
+                    className="w-full bg-primary hover:bg-primary/90"
                   >
-                    {stage3Loading ? (
-                      <>
-                        <Loader2 className="w-4 h-4 mr-2 animate-spin" />
-                        Generating...
-                      </>
-                    ) : (
-                      "Proceed to Stage 3: Generate Actions"
-                    )}
+                    <Settings className="w-4 h-4 mr-2" />
+                    Proceed to Actions Panel
                   </Button>
-                )}
+                </div>
               </CardContent>
             </Card>
           )}
@@ -2397,573 +2562,680 @@ const ComplaintDetailPage: React.FC = () => {
 
         {/* Actions Tab */}
         <TabsContent value="actions" className="space-y-4">
-          {/* Officer Assignment Section */}
-          <Card className="border-orange-200 shadow-lg">
-            <CardHeader className="bg-gradient-to-r from-orange-500 via-amber-500 to-orange-600 text-white">
-              <div className="flex items-center justify-between">
+          {/* Check if drafted_letter exists */}
+          {!(complaint as any)?.drafted_letter && !letter ? (
+            <Card className="border-orange-200 shadow-lg">
+              <CardHeader className="bg-gradient-to-r from-orange-500 via-amber-500 to-orange-600 text-white">
                 <div className="flex items-center gap-3">
                   <div className="p-2 bg-white/20 rounded-lg backdrop-blur-sm">
-                    <UserCheck className="w-6 h-6 text-white" />
+                    <FileText className="w-6 h-6 text-white" />
                   </div>
                   <div>
                     <CardTitle className="text-2xl text-white">
-                      Assign to Officer
+                      Draft Letter Required
                     </CardTitle>
                     <p className="text-sm text-orange-100 mt-1">
-                      Assign this complaint to an officer for resolution
+                      Please draft a letter first to proceed with actions
                     </p>
                   </div>
                 </div>
-                {complaint?.isOfficerAssigned && (
-                  <div className="flex items-center gap-2 bg-white/20 px-3 py-1.5 rounded-full backdrop-blur-sm">
-                    <CheckCircle className="w-5 h-5 text-white" />
-                    <span className="text-sm font-medium text-white">
-                      Assigned
-                    </span>
-                  </div>
-                )}
-                {!complaint?.isOfficerAssigned &&
-                  assignmentExecutives.length === 0 && (
-                    <Button
-                      onClick={loadAssignmentExecutives}
-                      disabled={loadingAssignmentExecutives}
-                      size="sm"
-                      className="bg-white text-primary hover:bg-blue-50"
-                    >
-                      {loadingAssignmentExecutives ? (
-                        <>
-                          <Loader2 className="w-4 h-4 mr-2 animate-spin" />
-                          Loading...
-                        </>
-                      ) : (
-                        <>
-                          <Users className="w-4 h-4 mr-2" />
-                          Load Officers
-                        </>
-                      )}
-                    </Button>
-                  )}
-              </div>
-            </CardHeader>
-            <CardContent className="p-6">
-              {complaint?.isOfficerAssigned && !assignmentResult ? (
-                <div className="p-6 bg-gradient-to-br from-blue-50 to-indigo-50 border-2 border-blue-300 rounded-xl">
-                  <div className="flex items-start gap-4">
-                    <div className="p-3 bg-blue-500 rounded-lg">
-                      <UserCheck className="w-6 h-6 text-white" />
-                    </div>
-                    <div className="flex-1">
-                      <h3 className="text-xl font-bold text-blue-900 mb-2">
-                        Complaint Already Assigned
-                      </h3>
-                      <p className="text-sm text-blue-700 mb-4">
-                        This complaint has already been assigned to an officer.
-                      </p>
-                      <div className="p-3 bg-white rounded-lg border border-blue-200">
-                        <p className="text-sm font-semibold text-foreground">
-                          Assigned Officer
-                        </p>
-                        <p className="text-xs text-muted-foreground mt-1">
-                          Check the complaint details for more information.
-                        </p>
-                      </div>
-                    </div>
-                  </div>
-                </div>
-              ) : loadingAssignmentExecutives ? (
-                <div className="flex flex-col items-center justify-center gap-4 py-16">
-                  <div className="relative">
-                    <div className="w-16 h-16 border-4 border-primary/20 border-t-primary rounded-full animate-spin"></div>
-                    <Users className="w-8 h-8 text-primary absolute top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2" />
-                  </div>
-                  <div className="text-center">
-                    <p className="text-lg font-semibold text-foreground">
-                      Loading officers...
-                    </p>
-                    <p className="text-sm text-muted-foreground mt-1">
-                      Fetching available executives
-                    </p>
-                  </div>
-                </div>
-              ) : assignmentExecutives.length === 0 ? (
+              </CardHeader>
+              <CardContent className="p-6">
                 <div className="text-center py-12">
-                  <div className="w-20 h-20 mx-auto mb-6 rounded-full bg-gradient-to-br from-blue-100 to-indigo-100 flex items-center justify-center">
-                    <Users className="w-10 h-10 text-blue-400" />
+                  <div className="w-20 h-20 mx-auto mb-6 rounded-full bg-gradient-to-br from-orange-100 to-amber-100 flex items-center justify-center">
+                    <FileText className="w-10 h-10 text-orange-400" />
                   </div>
-                  <p className="text-lg font-semibold text-foreground mb-2">
-                    No Officers Loaded
-                  </p>
-                  <p className="text-sm text-muted-foreground mb-6">
-                    Click the button below to load available officers
-                  </p>
-                  <Button
-                    onClick={loadAssignmentExecutives}
-                    size="lg"
-                    className="bg-primary hover:bg-primary/90"
-                  >
-                    <Users className="w-4 h-4 mr-2" />
-                    Load Officers
-                  </Button>
-                </div>
-              ) : assignmentResult ? (
-                <div className="space-y-4">
-                  {assignmentResult.isNewOfficer &&
-                  assignmentResult.user &&
-                  assignmentResult.user.password ? (
-                    <div className="p-6 bg-gradient-to-br from-green-50 to-emerald-50 border-2 border-green-300 rounded-xl">
-                      <div className="flex items-start gap-4">
-                        <div className="p-3 bg-green-500 rounded-lg">
-                          <CheckCircle className="w-6 h-6 text-white" />
-                        </div>
-                        <div className="flex-1">
-                          <h3 className="text-xl font-bold text-green-900 mb-2">
-                            Officer Assigned Successfully!
-                          </h3>
-                          <p className="text-sm text-green-700 mb-4">
-                            A new user account has been created for the officer.
-                            Please save the credentials below.
-                          </p>
-                          <div className="space-y-3">
-                            <div className="p-4 bg-white rounded-lg border border-green-200">
-                              <Label className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-2 block">
-                                Email
-                              </Label>
-                              <div className="flex items-center gap-2">
-                                <Mail className="w-4 h-4 text-green-600" />
-                                <p className="text-sm font-semibold text-foreground">
-                                  {assignmentResult.user?.email || "N/A"}
-                                </p>
-                                {assignmentResult.user?.email && (
-                                  <Button
-                                    variant="ghost"
-                                    size="sm"
-                                    onClick={() =>
-                                      handleCopyEmail(
-                                        assignmentResult.user!.email
-                                      )
-                                    }
-                                    className="ml-auto h-7 px-2"
-                                  >
-                                    {copiedEmail ? (
-                                      <Check className="w-3 h-3 text-green-600" />
-                                    ) : (
-                                      <Copy className="w-3 h-3" />
-                                    )}
-                                  </Button>
-                                )}
-                              </div>
-                            </div>
-                            <div className="p-4 bg-white rounded-lg border border-green-200">
-                              <Label className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-2 block">
-                                Password
-                              </Label>
-                              <div className="flex items-center gap-2">
-                                <div className="flex-1 font-mono text-sm font-semibold text-foreground bg-gray-50 px-3 py-2 rounded border">
-                                  {assignmentResult.user?.password || "N/A"}
-                                </div>
-                                {assignmentResult.user?.password && (
-                                  <Button
-                                    variant="outline"
-                                    size="sm"
-                                    onClick={() =>
-                                      handleCopyPassword(
-                                        assignmentResult.user!.password!
-                                      )
-                                    }
-                                    className="h-9 px-3 border-green-300 hover:bg-green-50"
-                                  >
-                                    {copiedPassword ? (
-                                      <>
-                                        <Check className="w-4 h-4 mr-2 text-green-600" />
-                                        Copied!
-                                      </>
-                                    ) : (
-                                      <>
-                                        <Copy className="w-4 h-4 mr-2" />
-                                        Copy
-                                      </>
-                                    )}
-                                  </Button>
-                                )}
-                              </div>
-                            </div>
-                          </div>
-                        </div>
-                      </div>
-                    </div>
-                  ) : (
-                    <div className="p-6 bg-gradient-to-br from-blue-50 to-indigo-50 border-2 border-blue-300 rounded-xl">
-                      <div className="flex items-start gap-4">
-                        <div className="p-3 bg-blue-500 rounded-lg">
-                          <CheckCircle className="w-6 h-6 text-white" />
-                        </div>
-                        <div className="flex-1">
-                          <h3 className="text-xl font-bold text-blue-900 mb-2">
-                            Complaint Assigned Successfully!
-                          </h3>
-                          <p className="text-sm text-blue-700">
-                            The complaint has been assigned to an existing
-                            officer. They can now access it from their
-                            dashboard.
-                          </p>
-                          {assignmentResult.officer && (
-                            <div className="mt-4 p-3 bg-white rounded-lg border border-blue-200">
-                              <p className="text-sm font-semibold text-foreground">
-                                {assignmentResult.officer.name}
-                              </p>
-                              <p className="text-xs text-muted-foreground">
-                                {assignmentResult.officer.designation} -{" "}
-                                {assignmentResult.officer.department}
-                              </p>
-                            </div>
-                          )}
-                        </div>
-                      </div>
-                    </div>
-                  )}
-                  <Button
-                    onClick={() => {
-                      setAssignmentResult(null);
-                      setSelectedAssignmentExecutiveIndex(0);
-                    }}
-                    variant="outline"
-                    className="w-full"
-                  >
-                    Assign to Another Officer
-                  </Button>
-                </div>
-              ) : (
-                <div className="space-y-6">
-                  <div>
-                    <Label className="font-semibold text-lg text-foreground mb-4 block">
-                      Select Officer to Assign ({assignmentExecutives.length}{" "}
-                      available):
-                    </Label>
-                    <div className="relative">
-                      {/* Left Scroll Button */}
-                      {canScrollLeftAssignment && (
-                        <Button
-                          variant="outline"
-                          size="icon"
-                          className="absolute left-0 top-1/2 -translate-y-1/2 z-10 bg-white shadow-lg "
-                          onClick={() => scrollAssignmentOfficers("left")}
-                        >
-                          <ChevronLeft className="w-5 h-5" />
-                        </Button>
-                      )}
-                      {/* Right Scroll Button */}
-                      {canScrollRightAssignment && (
-                        <Button
-                          variant="outline"
-                          size="icon"
-                          className="absolute right-0 top-1/2 -translate-y-1/2 z-10 bg-white shadow-lg "
-                          onClick={() => scrollAssignmentOfficers("right")}
-                        >
-                          <ChevronRight className="w-5 h-5" />
-                        </Button>
-                      )}
-                      {/* Scrollable Container */}
-                      <div
-                        ref={assignmentOfficersScrollRef}
-                        onScroll={checkAssignmentScrollButtons}
-                        className="overflow-x-auto scrollbar-hide pb-4"
-                      >
-                        <RadioGroup
-                          value={selectedAssignmentExecutiveIndex.toString()}
-                          onValueChange={(value) =>
-                            setSelectedAssignmentExecutiveIndex(parseInt(value))
-                          }
-                          className="flex gap-4"
-                        >
-                          {assignmentExecutives.map((exec, index) => (
-                            <div
-                              key={index}
-                              className="w-[320px] flex-shrink-0"
-                            >
-                              <RadioGroupItem
-                                value={index.toString()}
-                                id={`assign-executive-${index}`}
-                                className="peer sr-only"
-                              />
-                              <Label
-                                htmlFor={`assign-executive-${index}`}
-                                className="flex flex-col p-4 border-2 rounded-xl cursor-pointer hover:bg-gradient-to-br hover:from-blue-50 hover:to-indigo-50 transition-all peer-data-[state=checked]:border-primary peer-data-[state=checked]:ring-4 peer-data-[state=checked]:ring-primary/20 peer-data-[state=checked]:bg-gradient-to-br peer-data-[state=checked]:from-primary/5 peer-data-[state=checked]:to-orange-50 h-full"
-                              >
-                                <div className="flex items-start gap-3">
-                                  <div className="w-10 h-10 rounded-full bg-gradient-to-br from-blue-500 to-indigo-600 flex items-center justify-center text-white font-bold text-sm flex-shrink-0">
-                                    {index + 1}
-                                  </div>
-                                  <div className="flex-1 min-w-0">
-                                    <div className="font-bold text-base text-foreground mb-1">
-                                      {exec.name || "Unknown"}
-                                    </div>
-                                    <div className="text-sm font-medium text-muted-foreground mb-2">
-                                      {exec.designation} - {exec.district}
-                                    </div>
-                                    <div className="space-y-1.5 text-sm">
-                                      {exec.email && (
-                                        <div className="flex items-center gap-2 text-muted-foreground">
-                                          <Mail className="w-3.5 h-3.5 text-primary flex-shrink-0" />
-                                          <span className="truncate">
-                                            {exec.email}
-                                          </span>
-                                        </div>
-                                      )}
-                                      {exec.phone && (
-                                        <div className="flex items-center gap-2 text-muted-foreground">
-                                          <Phone className="w-3.5 h-3.5 text-primary flex-shrink-0" />
-                                          <span>{exec.phone}</span>
-                                        </div>
-                                      )}
-                                      {exec.office_address && (
-                                        <div className="flex items-start gap-2 text-muted-foreground">
-                                          <MapPin className="w-3.5 h-3.5 text-primary mt-0.5 flex-shrink-0" />
-                                          <span className="text-xs">
-                                            {exec.office_address}
-                                          </span>
-                                        </div>
-                                      )}
-                                    </div>
-                                  </div>
-                                </div>
-                              </Label>
-                            </div>
-                          ))}
-                        </RadioGroup>
-                      </div>
-                    </div>
-                  </div>
-                  <Button
-                    onClick={handleAssignOfficer}
-                    disabled={
-                      assigningOfficer ||
-                      selectedAssignmentExecutiveIndex === -1
-                    }
-                    className="w-full bg-primary hover:bg-primary/90 shadow-lg"
-                    size="lg"
-                  >
-                    {assigningOfficer ? (
-                      <>
-                        <Loader2 className="w-4 h-4 mr-2 animate-spin" />
-                        Assigning Officer...
-                      </>
-                    ) : (
-                      <>
-                        <UserCheck className="w-4 h-4 mr-2" />
-                        Assign Complaint to Selected Officer
-                      </>
-                    )}
-                  </Button>
-                </div>
-              )}
-            </CardContent>
-          </Card>
-
-          <Card>
-            <CardHeader className="flex flex-row items-center justify-between">
-              <div className="flex items-center gap-3">
-                <div
-                  className={`w-6 h-6 rounded-full flex items-center justify-center text-xs font-bold ${
-                    actions
-                      ? "bg-green-500 text-white"
-                      : "bg-gray-300 text-gray-600"
-                  }`}
-                >
-                  3
-                </div>
-                <CardTitle>Stage 3: Action Plan</CardTitle>
-              </div>
-              {actions && <CheckCircle className="w-5 h-5 text-green-500" />}
-            </CardHeader>
-            <CardContent className="border-t">
-              {actions && Array.isArray(actions) && actions.length > 0 ? (
-                <div className="space-y-3">
-                  {actions.map((action: any, index: number) => {
-                    const ActionIcon = getActionIcon(action.type);
-                    const iconColor = getActionColor(action.type);
-                    return (
-                      <Card key={index}>
-                        <CardContent className="p-4 flex items-start justify-between">
-                          <div className="flex items-start gap-3 flex-1">
-                            <ActionIcon
-                              className={`w-5 h-5 ${iconColor} mt-0.5`}
-                            />
-                            <div className="flex-1">
-                              <div className="flex items-center gap-2 mb-1">
-                                <p className="font-semibold capitalize text-sm">
-                                  {action.type?.replace("_", " ")}
-                                </p>
-                                <Badge variant="outline" className="text-xs">
-                                  Step {index + 1}
-                                </Badge>
-                              </div>
-                              <p className="text-xs text-muted-foreground mb-1">
-                                To: {action.to}
-                              </p>
-                              <p className="text-sm text-foreground">
-                                {action.details}
-                              </p>
-                            </div>
-                          </div>
-                          <Button
-                            variant="outline"
-                            size="sm"
-                            onClick={() => handleExecuteAction(action, index)}
-                            disabled={sendingEmail[index]}
-                          >
-                            {sendingEmail[index] ? (
-                              <>
-                                <Loader2 className="w-3 h-3 mr-1 animate-spin" />
-                                Sending...
-                              </>
-                            ) : (
-                              "Execute"
-                            )}
-                          </Button>
-                        </CardContent>
-                      </Card>
-                    );
-                  })}
-                </div>
-              ) : actions ? (
-                <div className="text-center py-10 text-muted-foreground">
-                  <Settings className="w-12 h-12 mx-auto mb-4 text-muted-foreground/50" />
-                  <p className="text-sm">No actions in the action plan.</p>
-                </div>
-              ) : (
-                <div className="text-center py-10 text-muted-foreground">
-                  <Settings className="w-12 h-12 mx-auto mb-4 text-muted-foreground/50" />
-                  <p className="text-sm">No action plan generated yet.</p>
-                  <p className="text-sm mt-1">
-                    Please complete the Draft Letter workflow first.
+                  <h3 className="text-xl font-bold text-foreground mb-2">
+                    Draft Letter Required
+                  </h3>
+                  <p className="text-sm text-muted-foreground mb-6 max-w-md mx-auto">
+                    You need to draft a letter for this complaint before you can
+                    proceed with actions. Please go to the Draft Letter tab to
+                    create the letter first.
                   </p>
                   <Button
                     onClick={() => setActiveTab("draft")}
-                    variant="outline"
-                    className="mt-4"
+                    size="lg"
+                    className="bg-orange-500 hover:bg-orange-600 text-white shadow-lg"
                   >
-                    Go to Draft Letter
+                    <FileText className="w-4 h-4 mr-2" />
+                    Go to Draft Letter Tab
                   </Button>
                 </div>
-              )}
-
-              {/* Email History Section */}
-              {(emailHistory.length > 0 || loadingEmailHistory) && (
-                <div className="mt-8 pt-6 border-t">
-                  <div className="flex items-center gap-2 mb-4">
-                    <Mail className="w-5 h-5 text-primary" />
-                    <CardTitle className="text-lg">Email History</CardTitle>
-                    {!loadingEmailHistory && (
-                      <Badge variant="outline" className="ml-auto">
-                        {emailHistory.length}{" "}
-                        {emailHistory.length === 1 ? "email" : "emails"}
-                      </Badge>
-                    )}
-                  </div>
-                  {loadingEmailHistory ? (
-                    <div className="flex items-center justify-center gap-2 py-8 text-muted-foreground">
-                      <Loader2 className="w-4 h-4 animate-spin" />
-                      <span className="text-sm">Loading email history...</span>
+              </CardContent>
+            </Card>
+          ) : (
+            <>
+              {/* Officer Assignment Section */}
+              <Card className="border-orange-200 shadow-lg">
+                <CardHeader className="bg-gradient-to-r from-orange-500 via-amber-500 to-orange-600 text-white">
+                  <div className="space-y-4">
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center gap-3">
+                        <div className="p-2 bg-white/20 rounded-lg backdrop-blur-sm">
+                          <UserCheck className="w-6 h-6 text-white" />
+                        </div>
+                        <div>
+                          <CardTitle className="text-2xl text-white">
+                            Assign to Officer
+                          </CardTitle>
+                          <p className="text-sm text-orange-100 mt-1">
+                            Assign this complaint to an officer for resolution
+                          </p>
+                        </div>
+                      </div>
+                      {complaint?.isOfficerAssigned && (
+                        <div className="flex items-center gap-2 bg-white/20 px-3 py-1.5 rounded-full backdrop-blur-sm">
+                          <CheckCircle className="w-5 h-5 text-white" />
+                          <span className="text-sm font-medium text-white">
+                            Assigned
+                          </span>
+                        </div>
+                      )}
                     </div>
-                  ) : emailHistory.length > 0 ? (
-                    <div className="space-y-3">
-                      {emailHistory
-                        .slice()
-                        .reverse()
-                        .map((email: any, index: number) => (
-                          <Card
-                            key={index}
-                            className={`border-l-4 ${
-                              email.status === "sent"
-                                ? "border-l-green-500"
-                                : "border-l-red-500"
-                            }`}
-                          >
-                            <CardContent className="p-4">
-                              <div className="flex items-start justify-between mb-3">
-                                <div className="flex items-center gap-2">
-                                  {email.status === "sent" ? (
-                                    <CheckCircle className="w-4 h-4 text-green-500" />
-                                  ) : (
-                                    <XCircle className="w-4 h-4 text-red-500" />
-                                  )}
-                                  <Badge
-                                    variant={
-                                      email.status === "sent"
-                                        ? "default"
-                                        : "destructive"
-                                    }
-                                    className="text-xs"
-                                  >
-                                    {email.status === "sent"
-                                      ? "Sent"
-                                      : "Failed"}
-                                  </Badge>
-                                </div>
-                                <p className="text-xs text-muted-foreground">
-                                  {new Date(email.sentAt).toLocaleString()}
+
+                    {/* Selected Officer Details in Header */}
+                    {/* {(complaint as any)?.selected_officer && (
+                      <div className="mt-4 pt-4 border-t border-white/20">
+                        <div className="flex items-center gap-2 mb-3">
+                          <UserCheck className="w-4 h-4 text-white/90" />
+                          <span className="text-xs font-semibold text-white/90 uppercase tracking-wide">
+                            Selected Officer Details:
+                          </span>
+                        </div>
+                        <div className="bg-white/10 backdrop-blur-sm rounded-lg p-4 border border-white/20">
+                          <div className="flex items-start gap-4">
+                            <div className="w-12 h-12 rounded-full bg-white/20 backdrop-blur-sm flex items-center justify-center text-white font-bold text-lg flex-shrink-0 border-2 border-white/30">
+                              {(complaint as any).selected_officer.name
+                                ?.charAt(0)
+                                .toUpperCase() || "O"}
+                            </div>
+                            <div className="flex-1 min-w-0">
+                              <div className="mb-3">
+                                <h3 className="text-lg font-bold text-white mb-1">
+                                  {(complaint as any).selected_officer.name ||
+                                    "Unknown"}
+                                </h3>
+                                <p className="text-sm font-medium text-white/90">
+                                  {
+                                    (complaint as any).selected_officer
+                                      .designation
+                                  }
                                 </p>
                               </div>
-                              <div className="space-y-2">
-                                <div className="flex items-center gap-2">
-                                  <Label className="text-xs font-semibold text-muted-foreground w-12">
-                                    From:
-                                  </Label>
-                                  <p className="text-sm text-foreground">
-                                    {email.from}
-                                  </p>
-                                </div>
-                                <div className="flex items-center gap-2">
-                                  <Label className="text-xs font-semibold text-muted-foreground w-12">
-                                    To:
-                                  </Label>
-                                  <p className="text-sm text-foreground">
-                                    {email.to}
-                                  </p>
-                                </div>
-                                <div className="flex items-center gap-2">
-                                  <Label className="text-xs font-semibold text-muted-foreground w-12">
-                                    Subject:
-                                  </Label>
-                                  <p className="text-sm font-medium text-foreground">
-                                    {email.subject}
-                                  </p>
-                                </div>
-                                {email.messageId && (
+                              <div className="flex flex-wrap items-center gap-4 text-sm">
+                                {(complaint as any).selected_officer.email && (
                                   <div className="flex items-center gap-2">
-                                    <Label className="text-xs font-semibold text-muted-foreground w-12">
-                                      ID:
-                                    </Label>
-                                    <p className="text-xs text-muted-foreground font-mono">
-                                      {email.messageId}
-                                    </p>
+                                    <Mail className="w-4 h-4 text-white/80" />
+                                    <a
+                                      href={`mailto:${
+                                        (complaint as any).selected_officer
+                                          .email
+                                      }`}
+                                      className="text-white/90 hover:text-white hover:underline break-all"
+                                    >
+                                      {
+                                        (complaint as any).selected_officer
+                                          .email
+                                      }
+                                    </a>
                                   </div>
                                 )}
-                                {email.error && (
-                                  <div className="mt-2 p-2 bg-red-50 border border-red-200 rounded">
-                                    <p className="text-xs text-red-700">
-                                      <strong>Error:</strong> {email.error}
-                                    </p>
+                                {(complaint as any).selected_officer.phone && (
+                                  <div className="flex items-center gap-2">
+                                    <Phone className="w-4 h-4 text-white/80" />
+                                    <a
+                                      href={`tel:${
+                                        (complaint as any).selected_officer
+                                          .phone
+                                      }`}
+                                      className="text-white/90 hover:text-white hover:underline"
+                                    >
+                                      {
+                                        (complaint as any).selected_officer
+                                          .phone
+                                      }
+                                    </a>
+                                  </div>
+                                )}
+                                {(complaint as any).selected_officer
+                                  .office_address && (
+                                  <div className="flex items-start gap-2 w-full">
+                                    <MapPin className="w-4 h-4 text-white/80 mt-0.5 flex-shrink-0" />
+                                    <span className="text-white/90 text-xs">
+                                      {
+                                        (complaint as any).selected_officer
+                                          .office_address
+                                      }
+                                    </span>
                                   </div>
                                 )}
                               </div>
-                            </CardContent>
-                          </Card>
-                        ))}
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+                    )} */}
+                  </div>
+                </CardHeader>
+                <CardContent className="p-6">
+                  {complaint?.isOfficerAssigned && !assignmentResult ? (
+                    <div className="p-6 bg-gradient-to-br from-blue-50 to-indigo-50 border-2 border-blue-300 rounded-xl">
+                      <div className="flex items-start gap-4">
+                        <div className="p-3 bg-blue-500 rounded-lg">
+                          <UserCheck className="w-6 h-6 text-white" />
+                        </div>
+                        <div className="flex-1">
+                          <h3 className="text-xl font-bold text-blue-900 mb-2">
+                            Complaint Already Assigned
+                          </h3>
+                          <p className="text-sm text-blue-700 mb-4">
+                            This complaint has already been assigned to an
+                            officer.
+                          </p>
+                          <div className="p-3 bg-white rounded-lg border border-blue-200">
+                            <p className="text-sm font-semibold text-foreground">
+                              Assigned Officer
+                            </p>
+                            <p className="text-xs text-muted-foreground mt-1">
+                              Check the complaint details for more information.
+                            </p>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  ) : !(complaint as any)?.selected_officer ? (
+                    <div className="text-center py-12">
+                      <div className="w-20 h-20 mx-auto mb-6 rounded-full bg-gradient-to-br from-orange-100 to-amber-100 flex items-center justify-center">
+                        <UserCheck className="w-10 h-10 text-orange-400" />
+                      </div>
+                      <p className="text-lg font-semibold text-foreground mb-2">
+                        No Selected Officer
+                      </p>
+                      <p className="text-sm text-muted-foreground mb-6">
+                        Please draft a letter first to select an officer for
+                        assignment.
+                      </p>
+                      <Button
+                        onClick={() => setActiveTab("draft")}
+                        size="lg"
+                        className="bg-orange-500 hover:bg-orange-600 text-white"
+                      >
+                        <FileText className="w-4 h-4 mr-2" />
+                        Go to Draft Letter Tab
+                      </Button>
+                    </div>
+                  ) : assignmentResult ? (
+                    <div className="space-y-4">
+                      {assignmentResult.isNewOfficer &&
+                      assignmentResult.user &&
+                      assignmentResult.user.password ? (
+                        <div className="p-6 bg-gradient-to-br from-green-50 to-emerald-50 border-2 border-green-300 rounded-xl">
+                          <div className="flex items-start gap-4">
+                            <div className="p-3 bg-green-500 rounded-lg">
+                              <CheckCircle className="w-6 h-6 text-white" />
+                            </div>
+                            <div className="flex-1">
+                              <h3 className="text-xl font-bold text-green-900 mb-2">
+                                Officer Assigned Successfully!
+                              </h3>
+                              <p className="text-sm text-green-700 mb-4">
+                                A new user account has been created for the
+                                officer. Please save the credentials below.
+                              </p>
+                              <div className="space-y-3">
+                                <div className="p-4 bg-white rounded-lg border border-green-200">
+                                  <Label className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-2 block">
+                                    Email
+                                  </Label>
+                                  <div className="flex items-center gap-2">
+                                    <Mail className="w-4 h-4 text-green-600" />
+                                    <p className="text-sm font-semibold text-foreground">
+                                      {assignmentResult.user?.email || "N/A"}
+                                    </p>
+                                    {assignmentResult.user?.email && (
+                                      <Button
+                                        variant="ghost"
+                                        size="sm"
+                                        onClick={() =>
+                                          handleCopyEmail(
+                                            assignmentResult.user!.email
+                                          )
+                                        }
+                                        className="ml-auto h-7 px-2"
+                                      >
+                                        {copiedEmail ? (
+                                          <Check className="w-3 h-3 text-green-600" />
+                                        ) : (
+                                          <Copy className="w-3 h-3" />
+                                        )}
+                                      </Button>
+                                    )}
+                                  </div>
+                                </div>
+                                <div className="p-4 bg-white rounded-lg border border-green-200">
+                                  <Label className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-2 block">
+                                    Password
+                                  </Label>
+                                  <div className="flex items-center gap-2">
+                                    <div className="flex-1 font-mono text-sm font-semibold text-foreground bg-gray-50 px-3 py-2 rounded border">
+                                      {assignmentResult.user?.password || "N/A"}
+                                    </div>
+                                    {assignmentResult.user?.password && (
+                                      <Button
+                                        variant="outline"
+                                        size="sm"
+                                        onClick={() =>
+                                          handleCopyPassword(
+                                            assignmentResult.user!.password!
+                                          )
+                                        }
+                                        className="h-9 px-3 border-green-300 hover:bg-green-50"
+                                      >
+                                        {copiedPassword ? (
+                                          <>
+                                            <Check className="w-4 h-4 mr-2 text-green-600" />
+                                            Copied!
+                                          </>
+                                        ) : (
+                                          <>
+                                            <Copy className="w-4 h-4 mr-2" />
+                                            Copy
+                                          </>
+                                        )}
+                                      </Button>
+                                    )}
+                                  </div>
+                                </div>
+                              </div>
+                            </div>
+                          </div>
+                        </div>
+                      ) : (
+                        <div className="p-6 bg-gradient-to-br from-blue-50 to-indigo-50 border-2 border-blue-300 rounded-xl">
+                          <div className="flex items-start gap-4">
+                            <div className="p-3 bg-blue-500 rounded-lg">
+                              <CheckCircle className="w-6 h-6 text-white" />
+                            </div>
+                            <div className="flex-1">
+                              <h3 className="text-xl font-bold text-blue-900 mb-2">
+                                Complaint Assigned Successfully!
+                              </h3>
+                              <p className="text-sm text-blue-700">
+                                The complaint has been assigned to an existing
+                                officer. They can now access it from their
+                                dashboard.
+                              </p>
+                              {assignmentResult.officer && (
+                                <div className="mt-4 p-3 bg-white rounded-lg border border-blue-200">
+                                  <p className="text-sm font-semibold text-foreground">
+                                    {assignmentResult.officer.name}
+                                  </p>
+                                  <p className="text-xs text-muted-foreground">
+                                    {assignmentResult.officer.designation} -{" "}
+                                    {assignmentResult.officer.department}
+                                  </p>
+                                </div>
+                              )}
+                            </div>
+                          </div>
+                        </div>
+                      )}
+                      <Button
+                        onClick={() => {
+                          setAssignmentResult(null);
+                        }}
+                        variant="outline"
+                        className="w-full"
+                      >
+                        Assign to Another Officer
+                      </Button>
                     </div>
                   ) : (
-                    <div className="text-center py-8 text-muted-foreground">
-                      <Mail className="w-12 h-12 mx-auto mb-4 text-muted-foreground/50" />
-                      <p className="text-sm">No email history yet.</p>
-                      <p className="text-xs mt-1">
-                        Emails sent for this complaint will appear here.
-                      </p>
+                    <div className="space-y-6">
+                      {/* Highlighted Selected Officer Card */}
+                      {(complaint as any)?.selected_officer && (
+                        <div className="bg-gradient-to-br from-orange-50 via-amber-50 to-orange-100 border-2 border-orange-300 rounded-xl p-6 shadow-lg">
+                          <div className="flex items-start gap-4">
+                            <div className="w-16 h-16 rounded-full bg-gradient-to-br from-orange-500 to-amber-600 flex items-center justify-center text-white font-bold text-2xl flex-shrink-0 shadow-lg border-4 border-white">
+                              {(complaint as any).selected_officer.name
+                                ?.charAt(0)
+                                .toUpperCase() || "O"}
+                            </div>
+                            <div className="flex-1">
+                              <div className="mb-4">
+                                <div className="flex items-center gap-2 mb-2">
+                                  <Badge className="bg-orange-500 text-white border-0">
+                                    Selected Officer
+                                  </Badge>
+                                </div>
+                                <h3 className="text-2xl font-bold text-foreground mb-1">
+                                  {(complaint as any).selected_officer.name ||
+                                    "Unknown"}
+                                </h3>
+                                <p className="text-lg font-semibold text-primary">
+                                  {
+                                    (complaint as any).selected_officer
+                                      .designation
+                                  }
+                                </p>
+                              </div>
+                              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                {(complaint as any).selected_officer.email && (
+                                  <div className="flex items-center gap-3 p-3 bg-white rounded-lg border border-orange-200 shadow-sm">
+                                    <div className="p-2 bg-blue-500 rounded-lg">
+                                      <Mail className="w-4 h-4 text-white" />
+                                    </div>
+                                    <div className="flex-1 min-w-0">
+                                      <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-1">
+                                        Email
+                                      </p>
+                                      <a
+                                        href={`mailto:${
+                                          (complaint as any).selected_officer
+                                            .email
+                                        }`}
+                                        className="text-sm font-medium text-foreground hover:text-primary break-all"
+                                      >
+                                        {
+                                          (complaint as any).selected_officer
+                                            .email
+                                        }
+                                      </a>
+                                    </div>
+                                  </div>
+                                )}
+                                {(complaint as any).selected_officer.phone && (
+                                  <div className="flex items-center gap-3 p-3 bg-white rounded-lg border border-orange-200 shadow-sm">
+                                    <div className="p-2 bg-green-500 rounded-lg">
+                                      <Phone className="w-4 h-4 text-white" />
+                                    </div>
+                                    <div className="flex-1 min-w-0">
+                                      <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-1">
+                                        Phone
+                                      </p>
+                                      <a
+                                        href={`tel:${
+                                          (complaint as any).selected_officer
+                                            .phone
+                                        }`}
+                                        className="text-sm font-medium text-foreground hover:text-primary"
+                                      >
+                                        {
+                                          (complaint as any).selected_officer
+                                            .phone
+                                        }
+                                      </a>
+                                    </div>
+                                  </div>
+                                )}
+                                {(complaint as any).selected_officer
+                                  .office_address && (
+                                  <div className="flex items-start gap-3 p-3 bg-white rounded-lg border border-orange-200 shadow-sm md:col-span-2">
+                                    <div className="p-2 bg-purple-500 rounded-lg flex-shrink-0">
+                                      <MapPin className="w-4 h-4 text-white" />
+                                    </div>
+                                    <div className="flex-1 min-w-0">
+                                      <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-1">
+                                        Office Address
+                                      </p>
+                                      <p className="text-sm font-medium text-foreground">
+                                        {
+                                          (complaint as any).selected_officer
+                                            .office_address
+                                        }
+                                      </p>
+                                    </div>
+                                  </div>
+                                )}
+                              </div>
+                            </div>
+                          </div>
+                        </div>
+                      )}
+
+                      {/* Assign Button */}
+                      <Button
+                        onClick={handleAssignOfficer}
+                        disabled={
+                          assigningOfficer ||
+                          !(complaint as any)?.selected_officer
+                        }
+                        className="w-full bg-primary hover:bg-primary/90 shadow-lg"
+                        size="lg"
+                      >
+                        {assigningOfficer ? (
+                          <>
+                            <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                            Assigning Officer...
+                          </>
+                        ) : (
+                          <>
+                            <UserCheck className="w-4 h-4 mr-2" />
+                            Assign Complaint to Selected Officer
+                          </>
+                        )}
+                      </Button>
                     </div>
                   )}
-                </div>
-              )}
-            </CardContent>
-          </Card>
+                </CardContent>
+              </Card>
+
+              <Card>
+                {/* <CardHeader className="flex flex-row items-center justify-between">
+                  <div className="flex items-center gap-3">
+                    <div
+                      className={`w-6 h-6 rounded-full flex items-center justify-center text-xs font-bold ${
+                        actions
+                          ? "bg-green-500 text-white"
+                          : "bg-gray-300 text-gray-600"
+                      }`}
+                    >
+                      3
+                    </div>
+                    <CardTitle>Stage 3: Action Plan</CardTitle>
+                  </div>
+                  {actions && (
+                    <CheckCircle className="w-5 h-5 text-green-500" />
+                  )}
+                </CardHeader> */}
+                <CardContent className="border-t">
+                  {/* {actions && Array.isArray(actions) && actions.length > 0 ? (
+                    <div className="space-y-3">
+                      {actions.map((action: any, index: number) => {
+                        const ActionIcon = getActionIcon(action.type);
+                        const iconColor = getActionColor(action.type);
+                        return (
+                          <Card key={index}>
+                            <CardContent className="p-4 flex items-start justify-between">
+                              <div className="flex items-start gap-3 flex-1">
+                                <ActionIcon
+                                  className={`w-5 h-5 ${iconColor} mt-0.5`}
+                                />
+                                <div className="flex-1">
+                                  <div className="flex items-center gap-2 mb-1">
+                                    <p className="font-semibold capitalize text-sm">
+                                      {action.type?.replace("_", " ")}
+                                    </p>
+                                    <Badge
+                                      variant="outline"
+                                      className="text-xs"
+                                    >
+                                      Step {index + 1}
+                                    </Badge>
+                                  </div>
+                                  <p className="text-xs text-muted-foreground mb-1">
+                                    To: {action.to}
+                                  </p>
+                                  <p className="text-sm text-foreground">
+                                    {action.details}
+                                  </p>
+                                </div>
+                              </div>
+                              <Button
+                                variant="outline"
+                                size="sm"
+                                onClick={() =>
+                                  handleExecuteAction(action, index)
+                                }
+                                disabled={sendingEmail[index]}
+                              >
+                                {sendingEmail[index] ? (
+                                  <>
+                                    <Loader2 className="w-3 h-3 mr-1 animate-spin" />
+                                    Sending...
+                                  </>
+                                ) : (
+                                  "Execute"
+                                )}
+                              </Button>
+                            </CardContent>
+                          </Card>
+                        );
+                      })}
+                    </div>
+                  ) : actions ? (
+                    <div className="text-center py-10 text-muted-foreground">
+                      <Settings className="w-12 h-12 mx-auto mb-4 text-muted-foreground/50" />
+                      <p className="text-sm">No actions in the action plan.</p>
+                    </div>
+                  ) : (
+                    <div className="text-center py-10 text-muted-foreground">
+                      <Settings className="w-12 h-12 mx-auto mb-4 text-muted-foreground/50" />
+                      <p className="text-sm">No action plan generated yet.</p>
+                      <p className="text-sm mt-1">
+                        Please complete the Draft Letter workflow first.
+                      </p>
+                      <Button
+                        onClick={() => setActiveTab("draft")}
+                        variant="outline"
+                        className="mt-4"
+                      >
+                        Go to Draft Letter
+                      </Button>
+                    </div>
+                  )} */}
+
+                  {(emailHistory.length > 0 || loadingEmailHistory) && (
+                    <div className="mt-8 pt-6 border-t">
+                      <div className="flex items-center gap-2 mb-4">
+                        <Mail className="w-5 h-5 text-primary" />
+                        <CardTitle className="text-lg">Email History</CardTitle>
+                        {!loadingEmailHistory && (
+                          <Badge variant="outline" className="ml-auto">
+                            {emailHistory.length}{" "}
+                            {emailHistory.length === 1 ? "email" : "emails"}
+                          </Badge>
+                        )}
+                      </div>
+                      {loadingEmailHistory ? (
+                        <div className="flex items-center justify-center gap-2 py-8 text-muted-foreground">
+                          <Loader2 className="w-4 h-4 animate-spin" />
+                          <span className="text-sm">
+                            Loading email history...
+                          </span>
+                        </div>
+                      ) : emailHistory.length > 0 ? (
+                        <div className="space-y-3">
+                          {emailHistory
+                            .slice()
+                            .reverse()
+                            .map((email: any, index: number) => (
+                              <Card
+                                key={index}
+                                className={`border-l-4 ${
+                                  email.status === "sent"
+                                    ? "border-l-green-500"
+                                    : "border-l-red-500"
+                                }`}
+                              >
+                                <CardContent className="p-4">
+                                  <div className="flex items-start justify-between mb-3">
+                                    <div className="flex items-center gap-2">
+                                      {email.status === "sent" ? (
+                                        <CheckCircle className="w-4 h-4 text-green-500" />
+                                      ) : (
+                                        <XCircle className="w-4 h-4 text-red-500" />
+                                      )}
+                                      <Badge
+                                        variant={
+                                          email.status === "sent"
+                                            ? "default"
+                                            : "destructive"
+                                        }
+                                        className="text-xs"
+                                      >
+                                        {email.status === "sent"
+                                          ? "Sent"
+                                          : "Failed"}
+                                      </Badge>
+                                    </div>
+                                    <p className="text-xs text-muted-foreground">
+                                      {new Date(email.sentAt).toLocaleString()}
+                                    </p>
+                                  </div>
+                                  <div className="space-y-2">
+                                    <div className="flex items-center gap-2">
+                                      <Label className="text-xs font-semibold text-muted-foreground w-12">
+                                        From:
+                                      </Label>
+                                      <p className="text-sm text-foreground">
+                                        {email.from}
+                                      </p>
+                                    </div>
+                                    <div className="flex items-center gap-2">
+                                      <Label className="text-xs font-semibold text-muted-foreground w-12">
+                                        To:
+                                      </Label>
+                                      <p className="text-sm text-foreground">
+                                        {email.to}
+                                      </p>
+                                    </div>
+                                    <div className="flex items-center gap-2">
+                                      <Label className="text-xs font-semibold text-muted-foreground w-12">
+                                        Subject:
+                                      </Label>
+                                      <p className="text-sm font-medium text-foreground">
+                                        {email.subject}
+                                      </p>
+                                    </div>
+                                    {email.messageId && (
+                                      <div className="flex items-center gap-2">
+                                        <Label className="text-xs font-semibold text-muted-foreground w-12">
+                                          ID:
+                                        </Label>
+                                        <p className="text-xs text-muted-foreground font-mono">
+                                          {email.messageId}
+                                        </p>
+                                      </div>
+                                    )}
+                                    {email.error && (
+                                      <div className="mt-2 p-2 bg-red-50 border border-red-200 rounded">
+                                        <p className="text-xs text-red-700">
+                                          <strong>Error:</strong> {email.error}
+                                        </p>
+                                      </div>
+                                    )}
+                                  </div>
+                                </CardContent>
+                              </Card>
+                            ))}
+                        </div>
+                      ) : (
+                        <div className="text-center py-8 text-muted-foreground">
+                          <Mail className="w-12 h-12 mx-auto mb-4 text-muted-foreground/50" />
+                          <p className="text-sm">No email history yet.</p>
+                          <p className="text-xs mt-1">
+                            Emails sent for this complaint will appear here.
+                          </p>
+                        </div>
+                      )}
+                    </div>
+                  )}
+                </CardContent>
+              </Card>
+            </>
+          )}
         </TabsContent>
       </Tabs>
 

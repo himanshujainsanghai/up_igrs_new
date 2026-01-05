@@ -91,7 +91,9 @@ const FileComplaint: React.FC = () => {
   const [scanResult, setScanResult] = useState<any>(null);
 
   // Batch scanning state
-  const [scannedDocuments, setScannedDocuments] = useState<ScannedDocument[]>([]);
+  const [scannedDocuments, setScannedDocuments] = useState<ScannedDocument[]>(
+    []
+  );
   const [processedDocs, setProcessedDocs] = useState<any>(null);
 
   // Set pre-selected category when page loads
@@ -102,7 +104,9 @@ const FileComplaint: React.FC = () => {
   }, [preSelectedCategory]);
 
   // Helper function to get location with reverse geocoding
-  const getLocationWithGeocoding = async (position: GeolocationPosition): Promise<{
+  const getLocationWithGeocoding = async (
+    position: GeolocationPosition
+  ): Promise<{
     latitude: number;
     longitude: number;
     location: string;
@@ -152,20 +156,28 @@ const FileComplaint: React.FC = () => {
       const city = address.city || address.town || address.village || "";
       const locality = address.suburb || address.hamlet || "";
       const pincode = address.postcode || "";
-      
+
       // Extract district and subdistrict (tehsil)
       // In India, LocationIQ may return district in different fields:
       // - county (often contains district name)
       // - state_district (state-level district)
       // - district (direct district field)
       // - For subdistrict/tehsil: suburb, town, tehsil, subdistrict, or county
-      let districtName = address.county || address.state_district || address.district || "";
-      let subdistrictName = address.suburb || address.town || address.tehsil || address.subdistrict || "";
-      
+      let districtName =
+        address.county || address.state_district || address.district || "";
+      let subdistrictName =
+        address.suburb ||
+        address.town ||
+        address.tehsil ||
+        address.subdistrict ||
+        "";
+
       // If county contains both district and subdistrict info, try to parse it
       // Sometimes county field contains "District, Subdistrict" format
       if (address.county && !districtName && !subdistrictName) {
-        const countyParts = address.county.split(',').map((s: string) => s.trim());
+        const countyParts = address.county
+          .split(",")
+          .map((s: string) => s.trim());
         if (countyParts.length >= 2) {
           districtName = countyParts[0];
           subdistrictName = countyParts[1];
@@ -173,13 +185,17 @@ const FileComplaint: React.FC = () => {
           districtName = countyParts[0];
         }
       }
-      
+
       const villageName = address.village || address.hamlet || "";
 
       return {
         latitude: position.coords.latitude,
         longitude: position.coords.longitude,
-        location: detectedArea || `Lat: ${position.coords.latitude.toFixed(4)}, Lng: ${position.coords.longitude.toFixed(4)}`,
+        location:
+          detectedArea ||
+          `Lat: ${position.coords.latitude.toFixed(
+            4
+          )}, Lng: ${position.coords.longitude.toFixed(4)}`,
         city,
         locality,
         pincode,
@@ -193,7 +209,9 @@ const FileComplaint: React.FC = () => {
       return {
         latitude: position.coords.latitude,
         longitude: position.coords.longitude,
-        location: `Lat: ${position.coords.latitude.toFixed(4)}, Lng: ${position.coords.longitude.toFixed(4)}`,
+        location: `Lat: ${position.coords.latitude.toFixed(
+          4
+        )}, Lng: ${position.coords.longitude.toFixed(4)}`,
         city: "",
         locality: "",
         pincode: "",
@@ -213,16 +231,20 @@ const FileComplaint: React.FC = () => {
         async (position) => {
           try {
             const locationData = await getLocationWithGeocoding(position);
-            
+
             setFormData((prev) => ({
               ...prev,
               ...locationData,
             }));
 
             if (locationData.districtName && locationData.subdistrictName) {
-              toast.success("Location detected. Your location has been auto-filled.");
+              toast.success(
+                "Location detected. Your location has been auto-filled."
+              );
             } else {
-              toast.warning("Location detected, but district/subdistrict could not be auto-filled. Please enter manually.");
+              toast.warning(
+                "Location detected, but district/subdistrict could not be auto-filled. Please enter manually."
+              );
             }
           } catch (error) {
             console.error("Location detection error:", error);
@@ -233,7 +255,9 @@ const FileComplaint: React.FC = () => {
         },
         (error) => {
           console.error("Geolocation error:", error);
-          toast.error("Unable to detect location. Please allow location access or enter manually.");
+          toast.error(
+            "Unable to detect location. Please allow location access or enter manually."
+          );
           setDetectingLocation(false);
         },
         {
@@ -271,15 +295,49 @@ const FileComplaint: React.FC = () => {
     setScanningDocument(true);
     setScannedFile(file);
     try {
-      const result = await aiService.processDocument(file);
+      // Process PDF files by converting to images first, then processing
+      let result;
+      if (isPdfFile(file)) {
+        try {
+          toast.info(`Converting PDF: ${file.name}`);
+          const pdfResult = await convertPdfToImages(file, {
+            scale: 2.0,
+            format: "image/png",
+          });
+
+          // Process first page for single file scan (or all pages in batch)
+          if (pdfResult.images.length > 0) {
+            // For single file, process first page only
+            result = await aiService.processDocument(pdfResult.images[0]);
+          } else {
+            throw new Error("PDF conversion resulted in no images");
+          }
+        } catch (error) {
+          console.error(`Error processing PDF ${file.name}:`, error);
+          toast.error(`Failed to process PDF: ${file.name}`);
+          throw error;
+        }
+      } else {
+        // Process image files directly
+        result = await aiService.processDocument(file);
+      }
+
       setScanResult(result);
 
-      // Add scanned file to attachments
-      const newAttachment: Attachment = {
-        file,
-        preview: URL.createObjectURL(file),
-      };
-      setAttachments((prev) => [...prev, newAttachment]);
+      // Add scanned file to attachments (avoid duplicates)
+      setAttachments((prev) => {
+        const alreadyExists = prev.some(
+          (att) => att.file.name === file.name && att.file.size === file.size
+        );
+        if (alreadyExists) {
+          return prev;
+        }
+        const newAttachment: Attachment = {
+          file,
+          preview: URL.createObjectURL(file),
+        };
+        return [...prev, newAttachment];
+      });
 
       // Auto-fill form fields if data is extracted
       if (result.data) {
@@ -344,7 +402,7 @@ const FileComplaint: React.FC = () => {
         if (data.category) {
           const categoryValue = data.category.toLowerCase().trim();
           const validCategories = COMPLAINT_CATEGORIES.map((c) => c.value);
-          
+
           if (validCategories.includes(categoryValue)) {
             setFormData((prev) => ({ ...prev, category: categoryValue }));
             fieldsUpdated++;
@@ -353,21 +411,29 @@ const FileComplaint: React.FC = () => {
 
         if (fieldsUpdated > 0) {
           toast.success(
-            `Document scanned! ${fieldsUpdated} field${fieldsUpdated > 1 ? 's' : ''} auto-filled.`
+            `Document scanned! ${fieldsUpdated} field${
+              fieldsUpdated > 1 ? "s" : ""
+            } auto-filled. File added to attachments.`
           );
           // Switch to form tab to show the filled data
           setTimeout(() => setActiveTab("form"), 500);
         } else {
-          toast.info("Document processed but no form fields could be auto-filled.");
+          toast.info(
+            "Document processed but no form fields could be auto-filled. File added to attachments."
+          );
         }
       } else if (result.extractedText || result.text) {
         // If only text is extracted, fill description
         const extractedText = result.extractedText || result.text;
         setFormData((prev) => ({ ...prev, description: extractedText }));
-        toast.success("Text extracted from document!");
+        toast.success(
+          "Text extracted from document! File added to attachments."
+        );
         setTimeout(() => setActiveTab("form"), 500);
       } else {
-        toast.info("Document processed. Please fill the form manually.");
+        toast.info(
+          "Document processed. File added to attachments. Please fill the form manually."
+        );
       }
     } catch (error: any) {
       console.error("Document scan error:", error);
@@ -382,11 +448,13 @@ const FileComplaint: React.FC = () => {
   };
 
   // Handle scan file upload for single or batch processing
-  const handleScanFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleScanFileUpload = async (
+    e: React.ChangeEvent<HTMLInputElement>
+  ) => {
     if (!e.target.files || e.target.files.length === 0) return;
 
     const files = Array.from(e.target.files);
-    
+
     // If single file, use existing single scan logic
     if (files.length === 1) {
       await handleDocumentScan(files[0]);
@@ -419,8 +487,10 @@ const FileComplaint: React.FC = () => {
     }
 
     setScanningDocument(true);
+    const filesToAddToAttachments: File[] = []; // Track all files to add as attachments
+
     try {
-      // Step 1: Convert PDFs to images and collect all image files
+      // Step 1: Convert PDFs to images and collect all image files for AI processing
       const allImageFiles: File[] = [];
 
       for (const doc of scannedDocuments) {
@@ -432,16 +502,24 @@ const FileComplaint: React.FC = () => {
               scale: 2.0,
               format: "image/png",
             });
-            // Add all converted pages to the image array
+
+            // Add all converted pages to the image array for AI processing
             allImageFiles.push(...pdfResult.images);
+
+            // Also add the original PDF file to attachments (users might want the original PDF)
+            filesToAddToAttachments.push(doc.file);
           } catch (error) {
             console.error(`Error converting PDF ${doc.file.name}:`, error);
             toast.error(`Failed to convert PDF: ${doc.file.name}`);
+            // Add original PDF to attachments even if conversion fails
+            filesToAddToAttachments.push(doc.file);
             // Continue with other files even if PDF conversion fails
           }
         } else {
-          // Directly add image files
+          // Directly add image files for AI processing
           allImageFiles.push(doc.file);
+          // Also add to attachments
+          filesToAddToAttachments.push(doc.file);
         }
       }
 
@@ -451,18 +529,35 @@ const FileComplaint: React.FC = () => {
         return;
       }
 
-      // Step 2: Process all images in batch
+      // Step 2: Process all images in batch with AI
       toast.info(`Processing ${allImageFiles.length} image(s) in batch...`);
       const result = await aiService.processDocumentsBatch(allImageFiles);
 
-      // Step 3: Console log the response
+      // Step 3: Console log the response for debugging
       console.log("Batch processing response:", result);
 
       // Step 4: Save to processedDocs state
       setProcessedDocs(result);
-      console.log("Saved to processedDocs:", result);
 
-      // Step 5: Convert formSuggestions to data format for auto-fill
+      // Step 5: Add all files (original images + PDFs) to attachments
+      // This ensures users can see and use the files in the complaint
+      const newAttachments: Attachment[] = filesToAddToAttachments.map(
+        (file) => ({
+          file,
+          preview: URL.createObjectURL(file),
+        })
+      );
+
+      // Add new attachments to existing ones (avoid duplicates)
+      setAttachments((prev) => {
+        const existingFileNames = new Set(prev.map((att) => att.file.name));
+        const uniqueNewAttachments = newAttachments.filter(
+          (att) => !existingFileNames.has(att.file.name)
+        );
+        return [...prev, ...uniqueNewAttachments];
+      });
+
+      // Step 6: Convert formSuggestions to data format for auto-fill
       const mergedResult: any = {
         data: {},
         text: result.extractedText || "",
@@ -492,7 +587,7 @@ const FileComplaint: React.FC = () => {
         });
       }
 
-      // Step 6: Auto-fill form fields if data is extracted
+      // Step 7: Auto-fill form fields if data is extracted
       if (mergedResult.data && Object.keys(mergedResult.data).length > 0) {
         const data = mergedResult.data;
 
@@ -519,21 +614,25 @@ const FileComplaint: React.FC = () => {
         }
 
         toast.success(
-          `${scannedDocuments.length} document(s) scanned successfully! Form fields have been auto-filled.`
+          `${scannedDocuments.length} document(s) scanned successfully! Form fields have been auto-filled and files added to attachments.`
         );
-        
+
         // Switch to form tab to show the filled data
         setTimeout(() => setActiveTab("form"), 500);
       } else if (mergedResult.text) {
         // If only text is extracted, fill description
         setFormData((prev) => ({ ...prev, description: mergedResult.text }));
-        toast.success("Text extracted from documents!");
+        toast.success(
+          "Text extracted from documents! Files added to attachments."
+        );
         setTimeout(() => setActiveTab("form"), 500);
       } else {
-        toast.info("Documents processed. Please fill the form manually.");
+        toast.info(
+          "Documents processed. Files added to attachments. Please fill the form manually."
+        );
       }
 
-      // Clear the scanned documents queue
+      // Step 8: Clear the scanned documents queue (cleanup preview URLs)
       scannedDocuments.forEach((doc) => URL.revokeObjectURL(doc.preview));
       setScannedDocuments([]);
     } catch (error: any) {
@@ -668,7 +767,8 @@ const FileComplaint: React.FC = () => {
         if (typeof value === "string" && value.trim()) {
           const lat = parseFloat(value);
           if (isNaN(lat)) return "Latitude must be a valid number";
-          if (lat < -90 || lat > 90) return "Latitude must be between -90 and 90";
+          if (lat < -90 || lat > 90)
+            return "Latitude must be between -90 and 90";
         }
         return "";
 
@@ -676,7 +776,8 @@ const FileComplaint: React.FC = () => {
         if (typeof value === "string" && value.trim()) {
           const lng = parseFloat(value);
           if (isNaN(lng)) return "Longitude must be a valid number";
-          if (lng < -180 || lng > 180) return "Longitude must be between -180 and 180";
+          if (lng < -180 || lng > 180)
+            return "Longitude must be between -180 and 180";
         }
         return "";
 
@@ -719,7 +820,10 @@ const FileComplaint: React.FC = () => {
     const districtError = validateField("districtName", formData.districtName);
     if (districtError) newErrors.districtName = districtError;
 
-    const subdistrictError = validateField("subdistrictName", formData.subdistrictName);
+    const subdistrictError = validateField(
+      "subdistrictName",
+      formData.subdistrictName
+    );
     if (subdistrictError) newErrors.subdistrictName = subdistrictError;
 
     const villageError = validateField("villageName", formData.villageName);
@@ -727,7 +831,8 @@ const FileComplaint: React.FC = () => {
 
     // Validate latitude
     if (!formData.latitude || formData.latitude === 0) {
-      newErrors.latitude = "Latitude is required. Please allow location access or click the location button.";
+      newErrors.latitude =
+        "Latitude is required. Please allow location access or click the location button.";
     } else {
       const latError = validateField("latitude", String(formData.latitude));
       if (latError) newErrors.latitude = latError;
@@ -735,7 +840,8 @@ const FileComplaint: React.FC = () => {
 
     // Validate longitude
     if (!formData.longitude || formData.longitude === 0) {
-      newErrors.longitude = "Longitude is required. Please allow location access or click the location button.";
+      newErrors.longitude =
+        "Longitude is required. Please allow location access or click the location button.";
     } else {
       const lngError = validateField("longitude", String(formData.longitude));
       if (lngError) newErrors.longitude = lngError;
@@ -771,36 +877,43 @@ const FileComplaint: React.FC = () => {
   };
 
   // Helper function to ensure location is set and return updated form data
-  const ensureLocationSet = async (currentData: typeof formData): Promise<typeof formData | null> => {
+  const ensureLocationSet = async (
+    currentData: typeof formData
+  ): Promise<typeof formData | null> => {
     // Check if location is already set
-    if (currentData.latitude && currentData.latitude !== 0 && currentData.longitude && currentData.longitude !== 0) {
+    if (
+      currentData.latitude &&
+      currentData.latitude !== 0 &&
+      currentData.longitude &&
+      currentData.longitude !== 0
+    ) {
       return currentData;
     }
 
     // Location not set, request it
     if (!navigator.geolocation) {
-      toast.error("Geolocation is not supported. Please use the location button to enter coordinates manually.");
+      toast.error(
+        "Geolocation is not supported. Please use the location button to enter coordinates manually."
+      );
       return null;
     }
 
     toast.info("Requesting location access... Please allow location access.");
-    
+
     try {
-      const position = await new Promise<GeolocationPosition>((resolve, reject) => {
-        navigator.geolocation.getCurrentPosition(
-          resolve,
-          reject,
-          {
+      const position = await new Promise<GeolocationPosition>(
+        (resolve, reject) => {
+          navigator.geolocation.getCurrentPosition(resolve, reject, {
             enableHighAccuracy: true,
             timeout: 10000,
             maximumAge: 0,
-          }
-        );
-      });
+          });
+        }
+      );
 
       // Get location with geocoding
       const locationData = await getLocationWithGeocoding(position);
-      
+
       // Merge location data with current form data
       const updatedData = {
         ...currentData,
@@ -812,7 +925,9 @@ const FileComplaint: React.FC = () => {
 
       // If district or subdistrict are missing, show warning
       if (!locationData.districtName || !locationData.subdistrictName) {
-        toast.warning("Location detected, but district/subdistrict could not be auto-filled. Please enter manually.");
+        toast.warning(
+          "Location detected, but district/subdistrict could not be auto-filled. Please enter manually."
+        );
       } else {
         toast.success("Location detected successfully!");
       }
@@ -820,7 +935,9 @@ const FileComplaint: React.FC = () => {
       return updatedData;
     } catch (error: any) {
       console.error("Location request error:", error);
-      toast.error("Location access is required to submit a complaint. Please allow location access or click the location button.");
+      toast.error(
+        "Location access is required to submit a complaint. Please allow location access or click the location button."
+      );
       return null;
     }
   };
@@ -872,7 +989,10 @@ const FileComplaint: React.FC = () => {
       const districtError = validateField("districtName", data.districtName);
       if (districtError) newErrors.districtName = districtError;
 
-      const subdistrictError = validateField("subdistrictName", data.subdistrictName);
+      const subdistrictError = validateField(
+        "subdistrictName",
+        data.subdistrictName
+      );
       if (subdistrictError) newErrors.subdistrictName = subdistrictError;
 
       const villageError = validateField("villageName", data.villageName);
@@ -880,7 +1000,8 @@ const FileComplaint: React.FC = () => {
 
       // Validate latitude
       if (!data.latitude || data.latitude === 0) {
-        newErrors.latitude = "Latitude is required. Please allow location access or click the location button.";
+        newErrors.latitude =
+          "Latitude is required. Please allow location access or click the location button.";
       } else {
         const latError = validateField("latitude", String(data.latitude));
         if (latError) newErrors.latitude = latError;
@@ -888,7 +1009,8 @@ const FileComplaint: React.FC = () => {
 
       // Validate longitude
       if (!data.longitude || data.longitude === 0) {
-        newErrors.longitude = "Longitude is required. Please allow location access or click the location button.";
+        newErrors.longitude =
+          "Longitude is required. Please allow location access or click the location button.";
       } else {
         const lngError = validateField("longitude", String(data.longitude));
         if (lngError) newErrors.longitude = lngError;
@@ -930,7 +1052,11 @@ const FileComplaint: React.FC = () => {
       // Note: complaintsService will transform to backend format (snake_case)
       // Build location string with address details
       let locationString = finalFormData.location.trim();
-      if (finalFormData.city || finalFormData.locality || finalFormData.pincode) {
+      if (
+        finalFormData.city ||
+        finalFormData.locality ||
+        finalFormData.pincode
+      ) {
         const addressParts = [
           locationString,
           finalFormData.locality ? `Locality: ${finalFormData.locality}` : "",
@@ -1199,7 +1325,8 @@ const FileComplaint: React.FC = () => {
                                   Click to upload or take photos
                                 </p>
                                 <p className="text-xs text-gray-500">
-                                  PDF, JPG, PNG (Max 10MB) - Select multiple files for batch scanning
+                                  PDF, JPG, PNG (Max 10MB) - Select multiple
+                                  files for batch scanning
                                 </p>
                               </div>
                             </label>
@@ -1212,7 +1339,8 @@ const FileComplaint: React.FC = () => {
                                 <div className="space-y-3">
                                   <div className="flex items-center justify-between">
                                     <p className="text-sm font-semibold text-blue-800">
-                                      Scanned Documents Queue ({scannedDocuments.length})
+                                      Scanned Documents Queue (
+                                      {scannedDocuments.length})
                                     </p>
                                     <Button
                                       type="button"
@@ -1246,7 +1374,9 @@ const FileComplaint: React.FC = () => {
                                         </span>
                                         <button
                                           type="button"
-                                          onClick={() => handleRemoveScannedDocument(index)}
+                                          onClick={() =>
+                                            handleRemoveScannedDocument(index)
+                                          }
                                           className="p-1 hover:bg-red-100 rounded text-red-600"
                                         >
                                           <X className="w-3 h-3" />
@@ -1581,7 +1711,8 @@ const FileComplaint: React.FC = () => {
                           htmlFor="subdistrictName"
                           className="text-xs font-semibold text-gray-700 flex items-center gap-1"
                         >
-                          Sub-District / Tehsil <span className="text-red-500">*</span>
+                          Sub-District / Tehsil{" "}
+                          <span className="text-red-500">*</span>
                         </Label>
                         <Input
                           id="subdistrictName"

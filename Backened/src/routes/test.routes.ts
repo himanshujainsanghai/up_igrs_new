@@ -11,6 +11,7 @@ const router = Router();
 
 // Public routes (no authentication required)
 router.get("/admins", testController.getAllAdmins); // Get all admin users
+router.get("/officers", testController.getAllOfficers); // Get all officer accounts
 router.post("/create-admin", testController.createAdmin); // Create admin user
 router.get("/complaints", testController.getAllComplaints); // Get all complaints data
 router.post("/heatmap", testController.createHeatMap); // Create or update heat map data

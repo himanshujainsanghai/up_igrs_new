@@ -550,6 +550,13 @@ export interface UpdateStage1DataDto {
     body: string;
     attachments?: string[];
   };
+  selected_officer?: {
+    name?: string;
+    designation: string;
+    office_address: string;
+    phone: string;
+    email: string;
+  };
   stage1_additional_docs?: string[];
 }
 
@@ -572,6 +579,9 @@ export const updateComplaintStage1Data = async (
   }
   if (stage1Data.drafted_letter !== undefined) {
     complaint.drafted_letter = stage1Data.drafted_letter;
+  }
+  if (stage1Data.selected_officer !== undefined) {
+    complaint.selected_officer = stage1Data.selected_officer;
   }
   if (stage1Data.stage1_additional_docs !== undefined) {
     complaint.stage1_additional_docs = stage1Data.stage1_additional_docs;

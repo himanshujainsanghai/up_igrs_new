@@ -48,6 +48,38 @@ export const getAllAdmins = async (
 };
 
 /**
+ * GET /api/v1/test/officers
+ * Get all officer accounts (auth-free route for testing)
+ * Returns complete details of all users with role='officer'
+ * Includes populated officer details if linked
+ */
+export const getAllOfficers = async (
+  req: Request,
+  res: Response,
+  next: NextFunction
+): Promise<void> => {
+  try {
+    // Fetch all users with role='officer'
+    // Exclude password field for security
+    // Populate officerId to get linked officer details
+    const officers = await User.find({ role: "officer" })
+      .select("-password")
+      .populate("officerId")
+      .lean()
+      .sort({ created_at: -1 });
+
+    logger.info(`Fetched ${officers.length} officer accounts`);
+
+    sendSuccess(res, {
+      count: officers.length,
+      officers,
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+
+/**
  * POST /api/v1/test/create-admin
  * Create a new admin user (auth-free route for testing)
  * Requires: email, name, password in req.body

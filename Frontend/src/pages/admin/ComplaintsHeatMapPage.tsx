@@ -33,6 +33,51 @@ import {
 const ComplaintsHeatMapPage: React.FC = () => {
   const navigate = useNavigate();
   const [geoData, setGeoData] = useState<FeatureCollection | null>(null);
+
+  // Prevent body scrolling when map page is mounted
+  useEffect(() => {
+    // Store original values
+    const originalBodyOverflow = document.body.style.overflow;
+    const originalBodyMargin = document.body.style.margin;
+    const originalBodyPadding = document.body.style.padding;
+    const originalHtmlOverflow = document.documentElement.style.overflow;
+    const originalHtmlMargin = document.documentElement.style.margin;
+    const originalHtmlPadding = document.documentElement.style.padding;
+    const originalRootStyle =
+      document.getElementById("root")?.style.cssText || "";
+
+    // Disable scrolling and remove margins/padding
+    document.body.style.overflow = "hidden";
+    document.body.style.margin = "0";
+    document.body.style.padding = "0";
+    document.documentElement.style.overflow = "hidden";
+    document.documentElement.style.margin = "0";
+    document.documentElement.style.padding = "0";
+
+    const rootElement = document.getElementById("root");
+    if (rootElement) {
+      rootElement.style.margin = "0";
+      rootElement.style.padding = "0";
+      rootElement.style.height = "100vh";
+      rootElement.style.width = "100%";
+      rootElement.style.maxWidth = "100vw";
+      rootElement.style.overflow = "hidden";
+      rootElement.style.position = "relative";
+    }
+
+    // Cleanup: restore original values on unmount
+    return () => {
+      document.body.style.overflow = originalBodyOverflow;
+      document.body.style.margin = originalBodyMargin;
+      document.body.style.padding = originalBodyPadding;
+      document.documentElement.style.overflow = originalHtmlOverflow;
+      document.documentElement.style.margin = originalHtmlMargin;
+      document.documentElement.style.padding = originalHtmlPadding;
+      if (rootElement) {
+        rootElement.style.cssText = originalRootStyle;
+      }
+    };
+  }, []);
   const [badaunGeoData, setBadaunGeoData] = useState<FeatureCollection | null>(
     null
   );
@@ -445,9 +490,33 @@ const ComplaintsHeatMapPage: React.FC = () => {
   );
 
   return (
-    <div className="min-h-screen h-screen w-screen flex flex-col bg-gradient-to-br from-orange-50 to-white overflow-hidden m-0 p-0">
+    <div
+      className="flex flex-col bg-gradient-to-br from-orange-50 to-white overflow-hidden"
+      style={{
+        position: "fixed",
+        top: 0,
+        left: 0,
+        right: 0,
+        bottom: 0,
+        height: "100vh",
+        width: "100%",
+        margin: 0,
+        padding: 0,
+      }}
+    >
       {/* Main Content - Full Screen Map (No Header) */}
-      <main className="flex-1 min-h-0 flex flex-col overflow-hidden m-0 p-0">
+      <main
+        className="flex-1 min-h-0 flex flex-col overflow-hidden"
+        style={{
+          margin: 0,
+          padding: 0,
+          width: "100%",
+          maxWidth: "100%",
+          minWidth: 0,
+          overflowX: "hidden",
+          overflowY: "hidden",
+        }}
+      >
         {loading && (
           <div className="h-full w-full flex items-center justify-center m-0 p-0">
             <Card className="w-full max-w-md">
@@ -471,25 +540,42 @@ const ComplaintsHeatMapPage: React.FC = () => {
         )}
 
         {!loading && !error && enrichedGeoData && (
-          <div className="relative flex-1 min-h-0 m-0 p-0 overflow-hidden">
-            {/* Visual indicator badge showing current view */}
-            <div className="absolute top-4 left-4 z-10 bg-white/90 backdrop-blur-sm px-3 py-2 rounded-lg shadow-md border border-orange-200">
-              <p className="text-xs font-medium text-foreground">
-                Viewing:{" "}
-                {badaunGeoData
-                  ? `${selectedDistrict} Subdistricts`
-                  : "Uttar Pradesh Districts"}
-              </p>
-            </div>
-
+          <div
+            className="relative flex-1 min-h-0 overflow-hidden"
+            style={{
+              margin: 0,
+              padding: 0,
+              width: "100%",
+              maxWidth: "100%",
+              minWidth: 0,
+              overflowX: "hidden",
+              overflowY: "hidden",
+            }}
+          >
             {/* Map Component - Full Screen */}
             {combinedGeoData && (
-              <div className="absolute inset-0 h-full w-full overflow-hidden  no-scrollbar">
+              <div
+                className="absolute inset-0 overflow-hidden"
+                style={{
+                  top: 0,
+                  left: 0,
+                  right: 0,
+                  bottom: 0,
+                  width: "100%",
+                  height: "100%",
+                  maxWidth: "100%",
+                  maxHeight: "100%",
+                  margin: 0,
+                  padding: 0,
+                  overflowX: "hidden",
+                  overflowY: "hidden",
+                }}
+              >
                 <MapRenderHeatMap
                   geoData={combinedGeoData}
                   valueProperty="heatValue"
                   onDistrictClick={handleDistrictClick}
-                  className="absolute inset-0 h-full w-full overflow-hidden  no-scrollbar"
+                  className="absolute inset-0 overflow-hidden"
                 />
               </div>
               // <MapRenderHeatMap

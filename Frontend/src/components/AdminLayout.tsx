@@ -82,7 +82,7 @@ const AdminLayout: React.FC<AdminLayoutProps> = ({ children, stats }) => {
   const navigate = useNavigate();
   const { user, logout, isAdmin, isOfficer } = useAuth();
   const [sidebarOpen, setSidebarOpen] = useState(true);
-  const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
+  const [sidebarCollapsed, setSidebarCollapsed] = useState(true);
 
   const handleLogout = async () => {
     await logout();
@@ -437,12 +437,12 @@ const AdminLayout: React.FC<AdminLayoutProps> = ({ children, stats }) => {
               )}
               {sidebarCollapsed && (
                 <div className="w-full flex items-center justify-center">
-                  <div className="w-8 h-8 bg-primary rounded-lg flex items-center justify-center">
-                    <Home className="w-5 h-5 text-primary-foreground" />
+                  <div className="w-8 h-8 flex items-center justify-center">
+                    <Home className="w-5 h-5 " />
                   </div>
                 </div>
               )}
-              <div className="flex items-center gap-1">
+              {/* <div className="flex items-center gap-1">
                 <Button
                   variant="ghost"
                   size="icon"
@@ -466,7 +466,7 @@ const AdminLayout: React.FC<AdminLayoutProps> = ({ children, stats }) => {
                 >
                   <X className="w-5 h-5" />
                 </Button>
-              </div>
+              </div> */}
             </div>
           </SidebarHeader>
 
@@ -546,9 +546,9 @@ const AdminLayout: React.FC<AdminLayoutProps> = ({ children, stats }) => {
               title={sidebarCollapsed ? "Expand sidebar" : "Collapse sidebar"}
             >
               {sidebarCollapsed ? (
-                <ChevronRight className="w-5 h-5" />
+                <ChevronRight className="w-5 h-5 hover:bg-orange-600 hover:text-white rounded-full" />
               ) : (
-                <ChevronLeft className="w-5 h-5" />
+                <ChevronLeft className="w-5 h-5 hover:bg-orange-600 hover:text-white rounded-full" />
               )}
             </Button>
           )}

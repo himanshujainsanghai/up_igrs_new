@@ -103,6 +103,14 @@ export interface IComplaint extends Document {
     body: string;
     attachments?: string[];
   };
+  selected_officer?: {
+    // Selected officer for whom the letter is drafted
+    name?: string;
+    designation: string;
+    office_address: string;
+    phone: string;
+    email: string;
+  };
   stage1_additional_docs?: string[]; // Additional documents URLs
   email_history?: Array<{
     // Email sending history
@@ -394,6 +402,9 @@ const ComplaintSchema = new Schema<IComplaint>(
       type: Schema.Types.Mixed,
     },
     drafted_letter: {
+      type: Schema.Types.Mixed,
+    },
+    selected_officer: {
       type: Schema.Types.Mixed,
     },
     stage1_additional_docs: [String],

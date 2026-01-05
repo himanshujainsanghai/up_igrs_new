@@ -25,6 +25,7 @@ import {
 import { useComplaints } from "@/hooks/useComplaints";
 import { useAuth } from "@/hooks/useAuth";
 import { complaintsService } from "@/services/complaints.service";
+import ComplaintTimeline from "@/components/complaints/ComplaintTimeline";
 import {
   Search,
   Filter,
@@ -254,9 +255,7 @@ const ComplaintsPage: React.FC = () => {
           complaintDistrict.toLowerCase() === districtFilter.toLowerCase());
       // Sub-district matching (case-insensitive)
       const complaintSubDistrict =
-        (complaint as any).subdistrict_name ||
-        complaint.subdistrictName ||
-        "";
+        (complaint as any).subdistrict_name || complaint.subdistrictName || "";
       const matchesSubDistrict =
         subDistrictFilter === "all" ||
         (complaintSubDistrict &&
@@ -416,7 +415,9 @@ const ComplaintsPage: React.FC = () => {
             <Select
               value={subDistrictFilter}
               onValueChange={setSubDistrictFilter}
-              disabled={districtFilter === "all" || availableSubDistricts.length === 0}
+              disabled={
+                districtFilter === "all" || availableSubDistricts.length === 0
+              }
             >
               <SelectTrigger>
                 <SelectValue
@@ -495,7 +496,10 @@ const ComplaintsPage: React.FC = () => {
                     </div>
                   </div>
                 </CardHeader>
-                <CardContent>
+                <CardContent className="space-y-4">
+                  {/* Timeline */}
+                  <ComplaintTimeline complaint={complaint} variant="compact" />
+
                   <div className="flex items-center gap-4 text-sm text-muted-foreground flex-wrap">
                     <span>Category: {complaint.category}</span>
                     <span>•</span>

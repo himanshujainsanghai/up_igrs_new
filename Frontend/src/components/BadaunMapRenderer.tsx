@@ -4,7 +4,13 @@
  * With proper zoom controls and bounds
  */
 
-import React, { useRef, useState, useEffect, useCallback } from "react";
+import React, {
+  useRef,
+  useState,
+  useEffect,
+  useCallback,
+  useMemo,
+} from "react";
 import { ChevronDown, ChevronUp } from "lucide-react";
 import Map, { Source, Layer, MapRef } from "react-map-gl/maplibre";
 import type { FeatureCollection } from "geojson";
@@ -60,7 +66,7 @@ interface BadaunMapRendererProps {
   showHeatmap?: boolean;
   heatmapColorScheme?: "complaints" | "population" | "custom";
   selectedSubdistrict?: string | null;
-  
+
   // Layer visibility controls
   layerToggles?: {
     showVillages: boolean;
@@ -90,12 +96,35 @@ const BadaunMapRenderer: React.FC<BadaunMapRendererProps> = ({
   const [hoveredSubdistrict, setHoveredSubdistrict] = useState<string | null>(
     null
   );
-  
+
   // Hover tooltip state
-  const [hoverTooltipData, setHoverTooltipData] = useState<SubdistrictHoverData | null>(null);
-  const [hoverTooltipPosition, setHoverTooltipPosition] = useState<{ x: number; y: number } | null>(null);
+  const [hoverTooltipData, setHoverTooltipData] =
+    useState<SubdistrictHoverData | null>(null);
+  const [hoverTooltipPosition, setHoverTooltipPosition] = useState<{
+    x: number;
+    y: number;
+  } | null>(null);
   const [loadingHoverData, setLoadingHoverData] = useState(false);
   const hoverTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+
+  // Minimal map style with white background (no base map tiles)
+  const whiteBackgroundStyle = useMemo(
+    () => ({
+      version: 8 as const,
+      sources: {},
+      layers: [
+        {
+          id: "background",
+          type: "background" as const,
+          paint: {
+            "background-color": "#FFFFFF",
+          },
+        },
+      ],
+      glyphs: "https://demotiles.maplibre.org/font/{fontstack}/{range}.pbf",
+    }),
+    []
+  );
 
   // Adjust map bounds when subdistrict is selected
   useEffect(() => {
@@ -273,21 +302,24 @@ const BadaunMapRenderer: React.FC<BadaunMapRendererProps> = ({
           if (hoveredSubdistrict !== subdistrictName) {
             setHoveredSubdistrict(subdistrictName);
             mapRef.current.getCanvas().style.cursor = "pointer";
-            
+
             // Set tooltip position
             setHoverTooltipPosition({ x: event.point.x, y: event.point.y });
-            
+
             // Clear any existing timeout
             if (hoverTimeoutRef.current) {
               clearTimeout(hoverTimeoutRef.current);
             }
-            
+
             // Debounce API call - only fetch after 300ms of hovering
             hoverTimeoutRef.current = setTimeout(async () => {
               setLoadingHoverData(true);
               try {
-                const subdistrictCode = feature.properties?.subdt_lgd || subdistrictName;
-                const hoverData = await geoService.getSubdistrictHoverData(subdistrictCode);
+                const subdistrictCode =
+                  feature.properties?.subdt_lgd || subdistrictName;
+                const hoverData = await geoService.getSubdistrictHoverData(
+                  subdistrictCode
+                );
                 setHoverTooltipData(hoverData);
               } catch (error) {
                 console.error("Failed to fetch subdistrict hover data:", error);
@@ -307,7 +339,7 @@ const BadaunMapRenderer: React.FC<BadaunMapRendererProps> = ({
             setHoverTooltipData(null);
             setHoverTooltipPosition(null);
             mapRef.current.getCanvas().style.cursor = "";
-            
+
             if (hoverTimeoutRef.current) {
               clearTimeout(hoverTimeoutRef.current);
             }
@@ -320,7 +352,7 @@ const BadaunMapRenderer: React.FC<BadaunMapRendererProps> = ({
           setHoverTooltipData(null);
           setHoverTooltipPosition(null);
           mapRef.current.getCanvas().style.cursor = "";
-          
+
           if (hoverTimeoutRef.current) {
             clearTimeout(hoverTimeoutRef.current);
           }
@@ -371,7 +403,7 @@ const BadaunMapRenderer: React.FC<BadaunMapRendererProps> = ({
         maxZoom={15}
         minZoom={5.5}
         style={{ width: "100%", height: "100%" }}
-        mapStyle="https://demotiles.maplibre.org/style.json"
+        mapStyle={whiteBackgroundStyle}
         interactiveLayerIds={[
           "features-fill",
           "features-outline",
@@ -699,15 +731,15 @@ const BadaunMapRenderer: React.FC<BadaunMapRendererProps> = ({
                           0,
                           "rgba(255,255,255,0)",
                           0.2,
-                          "#FEF3C7",
+                          "#F97316", // Deep orange
                           0.4,
-                          "#FCD34D",
+                          "#EA580C", // Darker orange
                           0.6,
-                          "#ff671f",
+                          "#DC2626", // Deep red
                           0.8,
-                          "#DC2626",
+                          "#B91C1C", // Darker red
                           1,
-                          "#991B1B",
+                          "#7F1D1D", // Very dark red
                         ] as any),
                   // Radius of heatmap blur
                   "heatmap-radius": [
@@ -766,11 +798,11 @@ const BadaunMapRenderer: React.FC<BadaunMapRendererProps> = ({
                     0,
                     "#10B981",
                     5,
-                    "#ff671f",
+                    "#EA580C", // Darker orange
                     10,
-                    "#F97316",
+                    "#DC2626", // Deep red
                     20,
-                    "#DC2626",
+                    "#B91C1C", // Darker red
                   ] as any,
                   "circle-stroke-width": 2,
                   "circle-stroke-color": "#FFFFFF",
@@ -830,25 +862,28 @@ const BadaunMapRenderer: React.FC<BadaunMapRendererProps> = ({
             <div className="flex items-center gap-2">
               <div
                 className="w-6 h-4 rounded"
-                style={{ background: "#FCA5A5" }}
+                style={{ background: "#F97316" }}
               ></div>
               <span className="text-xs">Low</span>
             </div>
             <div className="flex items-center gap-2">
               <div
                 className="w-6 h-4 rounded"
-                style={{ background: "#F87171" }}
+                style={{ background: "#EA580C" }}
               ></div>
               <span className="text-xs">Medium-Low</span>
             </div>
             <div className="flex items-center gap-2">
-              <div className="w-6 h-4 bg-red-500 rounded"></div>
+              <div
+                className="w-6 h-4 rounded"
+                style={{ background: "#DC2626" }}
+              ></div>
               <span className="text-xs">Medium-High</span>
             </div>
             <div className="flex items-center gap-2">
               <div
                 className="w-6 h-4 rounded"
-                style={{ background: "#991B1B" }}
+                style={{ background: "#7F1D1D" }}
               ></div>
               <span className="text-xs">High</span>
             </div>
@@ -862,9 +897,9 @@ const BadaunMapRenderer: React.FC<BadaunMapRendererProps> = ({
                     Click to toggle
                   </span>
                 </div>
-                
+
                 {/* Villages Layer */}
-                <label 
+                <label
                   className="flex items-center gap-2 p-2 rounded hover:bg-gray-50 cursor-pointer transition-colors border border-gray-200"
                   onClick={(e) => {
                     e.stopPropagation();
@@ -883,7 +918,7 @@ const BadaunMapRenderer: React.FC<BadaunMapRendererProps> = ({
                 </label>
 
                 {/* Towns Layer */}
-                <label 
+                <label
                   className="flex items-center gap-2 p-2 rounded hover:bg-gray-50 cursor-pointer transition-colors border border-gray-200"
                   onClick={(e) => {
                     e.stopPropagation();
@@ -902,7 +937,7 @@ const BadaunMapRenderer: React.FC<BadaunMapRendererProps> = ({
                 </label>
 
                 {/* Wards Layer */}
-                <label 
+                <label
                   className="flex items-center gap-2 p-2 rounded hover:bg-gray-50 cursor-pointer transition-colors border border-gray-200"
                   onClick={(e) => {
                     e.stopPropagation();
@@ -921,7 +956,7 @@ const BadaunMapRenderer: React.FC<BadaunMapRendererProps> = ({
                 </label>
 
                 {/* Admin HQ Layer */}
-                <label 
+                <label
                   className="flex items-center gap-2 p-2 rounded hover:bg-gray-50 cursor-pointer transition-colors border border-gray-200"
                   onClick={(e) => {
                     e.stopPropagation();
@@ -940,7 +975,7 @@ const BadaunMapRenderer: React.FC<BadaunMapRendererProps> = ({
                 </label>
 
                 {/* India Assets Layer */}
-                <label 
+                <label
                   className="flex items-center gap-2 p-2 rounded hover:bg-gray-50 cursor-pointer transition-colors border border-gray-200"
                   onClick={(e) => {
                     e.stopPropagation();
@@ -961,13 +996,17 @@ const BadaunMapRenderer: React.FC<BadaunMapRendererProps> = ({
             )}
 
             {/* Static Information Sections */}
-            <div className="border-t pt-2 mt-3 font-semibold text-sm">Boundaries</div>
+            <div className="border-t pt-2 mt-3 font-semibold text-sm">
+              Boundaries
+            </div>
             <div className="flex items-center gap-2">
               <div className="w-6 h-4 bg-orange-300 border-2 border-orange-600 rounded"></div>
               <span className="text-xs">Sub-districts (6)</span>
             </div>
 
-            <div className="border-t pt-2 mt-3 font-semibold text-sm">Markers</div>
+            <div className="border-t pt-2 mt-3 font-semibold text-sm">
+              Markers
+            </div>
             <div className="flex items-center gap-2">
               <div className="w-5 h-5 rounded-full bg-white border-2 border-black"></div>
               <span className="text-xs font-medium">Complaints</span>
@@ -1003,7 +1042,7 @@ const BadaunMapRenderer: React.FC<BadaunMapRendererProps> = ({
           <span className="text-2xl font-bold leading-none">−</span>
         </button>
       </div>
-      
+
       {/* Hover Tooltip */}
       {hoveredSubdistrict && hoverTooltipPosition && (
         <SubdistrictHoverTooltip

@@ -11,6 +11,8 @@ import { Complaint } from "../models/Complaint";
 import { User } from "../models/User";
 import DistrictAdministrativeHead from "../models/DistrictAdministrativeHead";
 import logger from "../config/logger";
+import { emailService } from "../modules/email";
+import { env } from "../config/env";
 
 /**
  * Complaints Controller
@@ -235,6 +237,7 @@ export const updateComplaintStage1Data = async (
       stage1Data.primary_officer !== undefined ||
       stage1Data.secondary_officer !== undefined ||
       stage1Data.drafted_letter !== undefined ||
+      stage1Data.selected_officer !== undefined ||
       stage1Data.stage1_additional_docs !== undefined;
 
     if (!hasData) {
@@ -395,6 +398,36 @@ export const getStatistics = async (
     const statistics = await complaintsService.getComplaintStatistics();
     sendSuccess(res, statistics);
   } catch (error) {
+    next(error);
+  }
+};
+
+/**
+ * GET /api/v1/complaints/badaun
+ * Get all complaints for Badaun district (public endpoint, no auth required)
+ * Returns all complaints filtered by district_name "Badaun" or "Budaun"
+ */
+export const getBadaunComplaints = async (
+  req: AuthRequest,
+  res: Response,
+  next: NextFunction
+): Promise<void> => {
+  try {
+    // Fetch all complaints for Badaun district (both spellings)
+    const complaints = await Complaint.find({
+      $or: [{ district_name: "Badaun" }, { district_name: "Budaun" }],
+    })
+      .sort({ created_at: -1 })
+      .lean();
+
+    logger.info(`Fetched ${complaints.length} complaints for Badaun district`);
+
+    sendSuccess(res, {
+      count: complaints.length,
+      complaints,
+    });
+  } catch (error) {
+    logger.error("Error fetching Badaun complaints:", error);
     next(error);
   }
 };
@@ -652,6 +685,220 @@ export const assignOfficer = async (
     const result = await complaintsService.assignOfficer(id, executive);
 
     sendSuccess(res, result, result.isNewOfficer ? 201 : 200);
+  } catch (error) {
+    next(error);
+  }
+};
+
+/**
+ * POST /api/v1/complaints/:id/assign-and-send-email
+ * Unified endpoint: Assign complaint to officer and send email with drafted letter
+ * If new officer account is created, includes email and password in the email
+ * Admin only
+ *
+ * Request body:
+ * {
+ *   "executive": {
+ *     "name": "Shri Keshav Kumar",
+ *     "designation": "Chief Development Officer (CDO)",
+ *     "email": "cdo.budaun@up.gov.in",
+ *     "phone": "05832-254231",
+ *     "office_address": "Collectorate, Budaun",
+ *     "district": "Budaun",
+ *     ... (other executive fields)
+ *   }
+ * }
+ */
+export const assignOfficerAndSendEmail = async (
+  req: AuthRequest,
+  res: Response,
+  next: NextFunction
+): Promise<void> => {
+  try {
+    const { id } = req.params;
+    const { executive } = req.body;
+
+    // Step 1: Assign officer to complaint
+    const assignmentResult = await complaintsService.assignOfficer(
+      id,
+      executive
+    );
+
+    // Step 2: Fetch complaint with drafted letter
+    const complaint = await Complaint.findOne({ id });
+    if (!complaint) {
+      throw new NotFoundError("Complaint");
+    }
+
+    // Check if drafted letter exists
+    if (!complaint.drafted_letter) {
+      throw new ValidationError(
+        "Drafted letter not found. Please draft a letter first."
+      );
+    }
+
+    const letter = complaint.drafted_letter;
+
+    // For testing: send all emails to test email
+    // TODO: Remove this hardcoding after testing
+    const testEmail = "himanshujainhj70662@gmail.com";
+
+    // Determine recipient email
+    // Priority: testEmail (for testing) > executive.email > primary_officer.email
+    let emailTo: string | undefined = testEmail;
+    if (!testEmail) {
+      emailTo = executive.email || complaint.primary_officer?.email;
+    }
+
+    if (!emailTo) {
+      throw new ValidationError(
+        "Recipient email address is required. Please provide executive email or ensure primary_officer has an email."
+      );
+    }
+
+    // Prepare email content
+    const emailSubject =
+      letter.subject || `Complaint Letter: ${complaint.title}`;
+
+    // Base email body with letter content
+    let emailBody = `
+${letter.body || ""}
+
+---
+Complaint ID: ${complaint.id}
+Complaint Title: ${complaint.title}
+Category: ${complaint.category}
+Status: ${complaint.status}
+    `.trim();
+
+    // If new officer was created, add credentials to email body
+    if (assignmentResult.isNewOfficer && assignmentResult.user?.password) {
+      const credentialsSection = `
+
+═══════════════════════════════════════════════════════════
+ACCOUNT CREDENTIALS
+═══════════════════════════════════════════════════════════
+
+A new account has been created for you to access the complaint management system.
+
+Email: ${assignmentResult.user.email}
+Password: ${assignmentResult.user.password}
+
+Please use these credentials to log in to the system and access your assigned complaints.
+You can change your password after logging in.
+
+Important: Please save these credentials securely.
+═══════════════════════════════════════════════════════════
+      `;
+      emailBody = emailBody + credentialsSection;
+    }
+
+    // Get sender email (from environment)
+    const fromEmail = env.SMTP_FROM_EMAIL || env.SMTP_USER || "";
+
+    try {
+      // Send email using email service
+      const emailResult = await emailService.sendEmail({
+        to: emailTo,
+        subject: emailSubject,
+        text: emailBody,
+        html: `<pre style="white-space: pre-wrap; font-family: Arial, sans-serif;">${emailBody.replace(
+          /\n/g,
+          "<br>"
+        )}</pre>`,
+      });
+
+      logger.info(
+        `Unified: Email sent successfully for complaint ${id} after assignment`,
+        {
+          messageId: emailResult.messageId,
+          to: emailTo,
+          subject: emailSubject,
+          isNewOfficer: assignmentResult.isNewOfficer,
+        }
+      );
+
+      // Save email history to complaint
+      const emailHistoryEntry = {
+        from: fromEmail,
+        to: emailTo,
+        subject: emailSubject,
+        messageId: emailResult.messageId,
+        sentAt: new Date(),
+        status: "sent" as const,
+      };
+
+      // Initialize email_history array if it doesn't exist
+      if (!complaint.email_history) {
+        complaint.email_history = [];
+      }
+
+      // Add email history entry
+      complaint.email_history.push(emailHistoryEntry);
+      complaint.updated_at = new Date();
+      await complaint.save({ validateModifiedOnly: true });
+
+      logger.info(`Email history saved for complaint ${id}`);
+
+      // Return combined result
+      sendSuccess(
+        res,
+        {
+          assignment: assignmentResult,
+          email: {
+            success: true,
+            messageId: emailResult.messageId,
+            recipient: emailTo,
+            subject: emailSubject,
+            sentAt: emailHistoryEntry.sentAt,
+          },
+        },
+        assignmentResult.isNewOfficer ? 201 : 200
+      );
+    } catch (error) {
+      logger.error(
+        `Failed to send email for complaint ${id} after assignment:`,
+        error
+      );
+
+      // Save failed email attempt to history
+      const emailHistoryEntry = {
+        from: fromEmail,
+        to: emailTo,
+        subject: emailSubject,
+        sentAt: new Date(),
+        status: "failed" as const,
+        error: error instanceof Error ? error.message : "Unknown error",
+      };
+
+      // Initialize email_history array if it doesn't exist
+      if (!complaint.email_history) {
+        complaint.email_history = [];
+      }
+
+      // Add failed email history entry
+      complaint.email_history.push(emailHistoryEntry);
+      complaint.updated_at = new Date();
+      await complaint.save({ validateModifiedOnly: true });
+
+      logger.info(`Failed email history saved for complaint ${id}`);
+
+      // Still return assignment result, but include email error
+      sendSuccess(
+        res,
+        {
+          assignment: assignmentResult,
+          email: {
+            success: false,
+            error:
+              error instanceof Error
+                ? `Failed to send email: ${error.message}`
+                : "Failed to send email",
+          },
+        },
+        assignmentResult.isNewOfficer ? 201 : 200
+      );
+    }
   } catch (error) {
     next(error);
   }
