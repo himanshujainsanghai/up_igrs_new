@@ -162,6 +162,9 @@ const ComplaintDetailPage: React.FC = () => {
   );
   const [emailHistory, setEmailHistory] = useState<any[]>([]);
   const [loadingEmailHistory, setLoadingEmailHistory] = useState(false);
+  const [approvingExtension, setApprovingExtension] = useState<{
+    [key: string]: boolean;
+  }>({});
 
   // Status updates
   const [updatingStatus, setUpdatingStatus] = useState(false);
@@ -237,6 +240,11 @@ const ComplaintDetailPage: React.FC = () => {
         _id: data._id,
         complaintId: (data as any).complaintId,
       });
+      console.log(
+        "Assigned Officer Details:",
+        (data as any).assignedOfficerDetails
+      );
+      console.log("Is Officer Assigned:", (data as any).isOfficerAssigned);
       setComplaint(data);
 
       // Load saved research data
@@ -751,6 +759,47 @@ const ComplaintDetailPage: React.FC = () => {
     }
   };
 
+  const handleApproveExtension = async (extensionRequest: any) => {
+    if (!id) return;
+    const requestId = extensionRequest._id || extensionRequest.id;
+    if (!requestId) {
+      toast.error("Invalid extension request");
+      return;
+    }
+
+    try {
+      setApprovingExtension({
+        ...approvingExtension,
+        [requestId]: true,
+      });
+
+      // Call the approval API
+      const result = await complaintsService.approveExtension(id, {
+        days: extensionRequest.days_requested,
+        // notes can be added here if needed in the future
+      });
+
+      toast.success(
+        `Extension approved! Time boundary extended to ${result.timeBoundary} days.`
+      );
+
+      // Reload complaint to get updated extension requests and time boundary
+      await loadComplaint();
+    } catch (error: any) {
+      console.error("Error approving extension:", error);
+      const errorMessage =
+        error?.response?.data?.error?.message ||
+        error?.message ||
+        "Failed to approve extension request";
+      toast.error(errorMessage);
+    } finally {
+      setApprovingExtension({
+        ...approvingExtension,
+        [requestId]: false,
+      });
+    }
+  };
+
   const getStatusBadge = (status: string) => {
     const config = {
       pending: {
@@ -1209,6 +1258,116 @@ const ComplaintDetailPage: React.FC = () => {
                     </p>
                   </div>
                 </div>
+
+                {/* Assigned Officer Details */}
+                {(complaint as any)?.assignedOfficerDetails && (
+                  <div className="mt-4 pt-4 border-t border-gray-200">
+                    <h3 className="text-sm font-semibold text-foreground uppercase tracking-wide border-b pb-2 mb-4">
+                      Assigned Officer Details
+                    </h3>
+                    <div className="grid grid-cols-1 md:grid-cols-3 gap-4 text-sm">
+                      {(complaint as any).assignedOfficerDetails.name && (
+                        <div>
+                          <Label className="text-xs text-muted-foreground">
+                            Officer Name
+                          </Label>
+                          <p className="text-foreground mt-1">
+                            {(complaint as any).assignedOfficerDetails.name}
+                          </p>
+                        </div>
+                      )}
+                      {(complaint as any).assignedOfficerDetails
+                        .designation && (
+                        <div>
+                          <Label className="text-xs text-muted-foreground">
+                            Designation
+                          </Label>
+                          <p className="text-foreground mt-1">
+                            {
+                              (complaint as any).assignedOfficerDetails
+                                .designation
+                            }
+                          </p>
+                        </div>
+                      )}
+                      {(complaint as any).assignedOfficerDetails.department && (
+                        <div>
+                          <Label className="text-xs text-muted-foreground">
+                            Department
+                          </Label>
+                          <p className="text-foreground mt-1">
+                            {
+                              (complaint as any).assignedOfficerDetails
+                                .department
+                            }
+                          </p>
+                        </div>
+                      )}
+                      {(complaint as any).assignedOfficerDetails.email && (
+                        <div>
+                          <Label className="text-xs text-muted-foreground">
+                            Email
+                          </Label>
+                          <p className="text-foreground mt-1">
+                            <a
+                              href={`mailto:${
+                                (complaint as any).assignedOfficerDetails.email
+                              }`}
+                              className="text-primary hover:underline break-all"
+                            >
+                              {(complaint as any).assignedOfficerDetails.email}
+                            </a>
+                          </p>
+                        </div>
+                      )}
+                      {(complaint as any).assignedOfficerDetails.phone && (
+                        <div>
+                          <Label className="text-xs text-muted-foreground">
+                            Phone
+                          </Label>
+                          <p className="text-foreground mt-1">
+                            <a
+                              href={`tel:${
+                                (complaint as any).assignedOfficerDetails.phone
+                              }`}
+                              className="text-primary hover:underline"
+                            >
+                              {(complaint as any).assignedOfficerDetails.phone}
+                            </a>
+                          </p>
+                        </div>
+                      )}
+                      {(complaint as any).assignedOfficerDetails
+                        .districtName && (
+                        <div>
+                          <Label className="text-xs text-muted-foreground">
+                            District
+                          </Label>
+                          <p className="text-foreground mt-1">
+                            {
+                              (complaint as any).assignedOfficerDetails
+                                .districtName
+                            }
+                          </p>
+                        </div>
+                      )}
+                      {(complaint as any).assignedOfficerDetails
+                        .officeAddress && (
+                        <div className="md:col-span-3">
+                          <Label className="text-xs text-muted-foreground">
+                            Office Address
+                          </Label>
+                          <p className="text-foreground mt-1">
+                            {
+                              (complaint as any).assignedOfficerDetails
+                                .officeAddress
+                            }
+                          </p>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                )}
               </div>
 
               {/* Images */}
@@ -2720,29 +2879,145 @@ const ComplaintDetailPage: React.FC = () => {
                 </CardHeader>
                 <CardContent className="p-6">
                   {complaint?.isOfficerAssigned && !assignmentResult ? (
-                    <div className="p-6 bg-gradient-to-br from-blue-50 to-indigo-50 border-2 border-blue-300 rounded-xl">
-                      <div className="flex items-start gap-4">
-                        <div className="p-3 bg-blue-500 rounded-lg">
-                          <UserCheck className="w-6 h-6 text-white" />
-                        </div>
-                        <div className="flex-1">
-                          <h3 className="text-xl font-bold text-blue-900 mb-2">
-                            Complaint Already Assigned
-                          </h3>
-                          <p className="text-sm text-blue-700 mb-4">
-                            This complaint has already been assigned to an
-                            officer.
-                          </p>
-                          <div className="p-3 bg-white rounded-lg border border-blue-200">
-                            <p className="text-sm font-semibold text-foreground">
-                              Assigned Officer
-                            </p>
-                            <p className="text-xs text-muted-foreground mt-1">
-                              Check the complaint details for more information.
+                    <div className="space-y-4">
+                      <div className="p-4 border border-blue-200 rounded-lg bg-blue-50/50">
+                        <div className="flex items-center gap-3">
+                          <UserCheck className="w-5 h-5 text-blue-600 flex-shrink-0" />
+                          <div>
+                            <h3 className="text-sm font-semibold text-foreground mb-1">
+                              Complaint Already Assigned
+                            </h3>
+                            <p className="text-xs text-muted-foreground">
+                              This complaint has already been assigned to an
+                              officer.
                             </p>
                           </div>
                         </div>
                       </div>
+
+                      {/* Assigned Officer Details */}
+                      {(complaint as any)?.assignedOfficerDetails && (
+                        <div className="mt-4 pt-4 border-t border-gray-200">
+                          <h3 className="text-sm font-semibold text-foreground uppercase tracking-wide border-b pb-2 mb-4">
+                            Assigned Officer Details
+                          </h3>
+                          <div className="grid grid-cols-1 md:grid-cols-3 gap-4 text-sm">
+                            {(complaint as any).assignedOfficerDetails.name && (
+                              <div>
+                                <Label className="text-xs text-muted-foreground">
+                                  Officer Name
+                                </Label>
+                                <p className="text-foreground mt-1">
+                                  {
+                                    (complaint as any).assignedOfficerDetails
+                                      .name
+                                  }
+                                </p>
+                              </div>
+                            )}
+                            {(complaint as any).assignedOfficerDetails
+                              .designation && (
+                              <div>
+                                <Label className="text-xs text-muted-foreground">
+                                  Designation
+                                </Label>
+                                <p className="text-foreground mt-1">
+                                  {
+                                    (complaint as any).assignedOfficerDetails
+                                      .designation
+                                  }
+                                </p>
+                              </div>
+                            )}
+                            {(complaint as any).assignedOfficerDetails
+                              .department && (
+                              <div>
+                                <Label className="text-xs text-muted-foreground">
+                                  Department
+                                </Label>
+                                <p className="text-foreground mt-1">
+                                  {
+                                    (complaint as any).assignedOfficerDetails
+                                      .department
+                                  }
+                                </p>
+                              </div>
+                            )}
+                            {(complaint as any).assignedOfficerDetails
+                              .email && (
+                              <div>
+                                <Label className="text-xs text-muted-foreground">
+                                  Email
+                                </Label>
+                                <p className="text-foreground mt-1">
+                                  <a
+                                    href={`mailto:${
+                                      (complaint as any).assignedOfficerDetails
+                                        .email
+                                    }`}
+                                    className="text-primary hover:underline break-all"
+                                  >
+                                    {
+                                      (complaint as any).assignedOfficerDetails
+                                        .email
+                                    }
+                                  </a>
+                                </p>
+                              </div>
+                            )}
+                            {(complaint as any).assignedOfficerDetails
+                              .phone && (
+                              <div>
+                                <Label className="text-xs text-muted-foreground">
+                                  Phone
+                                </Label>
+                                <p className="text-foreground mt-1">
+                                  <a
+                                    href={`tel:${
+                                      (complaint as any).assignedOfficerDetails
+                                        .phone
+                                    }`}
+                                    className="text-primary hover:underline"
+                                  >
+                                    {
+                                      (complaint as any).assignedOfficerDetails
+                                        .phone
+                                    }
+                                  </a>
+                                </p>
+                              </div>
+                            )}
+                            {(complaint as any).assignedOfficerDetails
+                              .districtName && (
+                              <div>
+                                <Label className="text-xs text-muted-foreground">
+                                  District
+                                </Label>
+                                <p className="text-foreground mt-1">
+                                  {
+                                    (complaint as any).assignedOfficerDetails
+                                      .districtName
+                                  }
+                                </p>
+                              </div>
+                            )}
+                            {(complaint as any).assignedOfficerDetails
+                              .officeAddress && (
+                              <div className="md:col-span-3">
+                                <Label className="text-xs text-muted-foreground">
+                                  Office Address
+                                </Label>
+                                <p className="text-foreground mt-1">
+                                  {
+                                    (complaint as any).assignedOfficerDetails
+                                      .officeAddress
+                                  }
+                                </p>
+                              </div>
+                            )}
+                          </div>
+                        </div>
+                      )}
                     </div>
                   ) : !(complaint as any)?.selected_officer ? (
                     <div className="text-center py-12">
@@ -3232,6 +3507,165 @@ const ComplaintDetailPage: React.FC = () => {
                       )}
                     </div>
                   )}
+
+                  {/* Extension Requests */}
+                  {(complaint as any)?.extensionRequests &&
+                    Array.isArray((complaint as any).extensionRequests) &&
+                    (complaint as any).extensionRequests.length > 0 && (
+                      <div className="mt-8 pt-6 border-t">
+                        <div className="flex items-center gap-2 mb-4">
+                          <Clock className="w-5 h-5 text-primary" />
+                          <CardTitle className="text-lg">
+                            Extension Requests
+                          </CardTitle>
+                          <Badge variant="outline" className="ml-auto">
+                            {(complaint as any).extensionRequests.length}{" "}
+                            {(complaint as any).extensionRequests.length === 1
+                              ? "request"
+                              : "requests"}
+                          </Badge>
+                        </div>
+                        <div className="space-y-3">
+                          {(complaint as any).extensionRequests.map(
+                            (request: any, index: number) => {
+                              const requestId =
+                                request._id || request.id || index;
+                              const isPending = request.status === "pending";
+                              const isApproved = request.status === "approved";
+                              const isRejected = request.status === "rejected";
+                              const isApproving =
+                                approvingExtension[requestId] || false;
+
+                              return (
+                                <Card
+                                  key={requestId}
+                                  className={`border-l-4 ${
+                                    isApproved
+                                      ? "border-l-green-500"
+                                      : isRejected
+                                      ? "border-l-red-500"
+                                      : "border-l-yellow-500"
+                                  }`}
+                                >
+                                  <CardContent className="p-4">
+                                    <div className="flex items-start justify-between mb-3">
+                                      <div className="flex items-center gap-2">
+                                        {isApproved ? (
+                                          <CheckCircle className="w-4 h-4 text-green-500" />
+                                        ) : isRejected ? (
+                                          <XCircle className="w-4 h-4 text-red-500" />
+                                        ) : (
+                                          <Clock className="w-4 h-4 text-yellow-500" />
+                                        )}
+                                        <Badge
+                                          variant={
+                                            isApproved
+                                              ? "default"
+                                              : isRejected
+                                              ? "destructive"
+                                              : "outline"
+                                          }
+                                          className="text-xs"
+                                        >
+                                          {isPending
+                                            ? "Pending"
+                                            : isApproved
+                                            ? "Approved"
+                                            : "Rejected"}
+                                        </Badge>
+                                      </div>
+                                      <p className="text-xs text-muted-foreground">
+                                        {new Date(
+                                          request.created_at ||
+                                            request.createdAt
+                                        ).toLocaleString()}
+                                      </p>
+                                    </div>
+                                    <div className="space-y-2">
+                                      <div className="flex items-center gap-2">
+                                        <Label className="text-xs font-semibold text-muted-foreground w-20">
+                                          Days:
+                                        </Label>
+                                        <p className="text-sm font-medium text-foreground">
+                                          {request.days_requested} day
+                                          {request.days_requested !== 1
+                                            ? "s"
+                                            : ""}
+                                        </p>
+                                      </div>
+                                      {request.reason && (
+                                        <div className="flex items-start gap-2">
+                                          <Label className="text-xs font-semibold text-muted-foreground w-20">
+                                            Reason:
+                                          </Label>
+                                          <p className="text-sm text-foreground flex-1">
+                                            {request.reason}
+                                          </p>
+                                        </div>
+                                      )}
+                                      <div className="flex items-center gap-2">
+                                        <Label className="text-xs font-semibold text-muted-foreground w-20">
+                                          Requested by:
+                                        </Label>
+                                        <p className="text-sm text-foreground capitalize">
+                                          {request.requested_by_role || "N/A"}
+                                        </p>
+                                      </div>
+                                      {request.decided_at && (
+                                        <div className="flex items-center gap-2">
+                                          <Label className="text-xs font-semibold text-muted-foreground w-20">
+                                            Decided at:
+                                          </Label>
+                                          <p className="text-sm text-foreground">
+                                            {new Date(
+                                              request.decided_at
+                                            ).toLocaleString()}
+                                          </p>
+                                        </div>
+                                      )}
+                                      {request.notes && (
+                                        <div className="flex items-start gap-2">
+                                          <Label className="text-xs font-semibold text-muted-foreground w-20">
+                                            Notes:
+                                          </Label>
+                                          <p className="text-sm text-foreground flex-1">
+                                            {request.notes}
+                                          </p>
+                                        </div>
+                                      )}
+                                    </div>
+                                    {isPending && (
+                                      <div className="mt-4 pt-4 border-t">
+                                        <Button
+                                          onClick={() =>
+                                            handleApproveExtension(request)
+                                          }
+                                          disabled={isApproving}
+                                          className="w-full bg-green-600 hover:bg-green-700 text-white"
+                                          size="sm"
+                                        >
+                                          {isApproving ? (
+                                            <>
+                                              <Loader2 className="w-3 h-3 mr-2 animate-spin" />
+                                              Approving...
+                                            </>
+                                          ) : (
+                                            <>
+                                              <CheckCircle className="w-3 h-3 mr-2" />
+                                              Approve Extension
+                                            </>
+                                          )}
+                                        </Button>
+                                      </div>
+                                    )}
+                                  </CardContent>
+                                </Card>
+                              );
+                            }
+                          )}
+                        </div>
+                      </div>
+                    )}
                 </CardContent>
               </Card>
             </>

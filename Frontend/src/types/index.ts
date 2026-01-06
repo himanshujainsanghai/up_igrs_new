@@ -172,11 +172,18 @@ export interface Complaint {
   arrivalTime?: string; // When complaint arrived to officer (ISO date string)
   assignedTime?: string; // When complaint was assigned to officer (ISO date string)
   timeBoundary?: number; // Time boundary in days (default: 7 days = 1 week)
-  isClosed?: boolean; // Whether complaint is closed by officer
-  closingTime?: string; // When complaint was closed (ISO date string)
-  officerRemarks?: string; // Officer's remarks/notes
-  officerAttachments?: string[]; // Array of attachment URLs uploaded by officer
-  closingProof?: string; // URL to closing proof document
+  isComplaintClosed?: boolean; // Whether complaint is closed by officer
+  closingDetails?: {
+    closedAt?: string; // When complaint was closed (ISO date string)
+    remarks?: string; // Closing remarks/notes
+    attachments?: ClosingAttachment[]; // Attachments with metadata
+    closedByOfficer?: {
+      id?: string;
+      name?: string;
+      email?: string;
+    };
+    closingProof?: string; // URL to closing proof document
+  };
   isExtended?: boolean; // Whether time boundary was extended
   officerFeedback?: string; // Officer's feedback
   drafted_letter?: {
@@ -198,6 +205,14 @@ export interface Complaint {
   };
   createdAt: string;
   updatedAt: string;
+}
+
+export interface ClosingAttachment {
+  url: string;
+  fileName?: string;
+  fileType?: string;
+  uploadedBy?: string;
+  uploadedAt?: string;
 }
 
 export interface ComplaintDocument {
@@ -222,6 +237,46 @@ export interface ComplaintNote {
     email: string;
   };
   createdAt: string;
+}
+
+export interface OfficerNote {
+  _id: string;
+  complaintId: string;
+  content: string;
+  type: "inward" | "outward";
+  attachments?: string[];
+  officerId?: string;
+  createdAt: string;
+}
+
+export interface OfficerAttachment {
+  _id: string;
+  complaintId: string;
+  noteId?: string;
+  attachmentType: "inward" | "outward";
+  fileUrl: string;
+  fileName: string;
+  fileType?: string;
+  fileSize?: number;
+  uploadedBy?: string;
+  createdAt: string;
+}
+
+export interface ComplaintExtensionRequest {
+  _id: string;
+  id?: string; // UUID identifier (optional, may come from backend)
+  complaintId: string;
+  requestedBy: string;
+  requestedByRole: "officer" | "admin";
+  daysRequested: number;
+  reason?: string;
+  status: "pending" | "approved" | "rejected";
+  decidedBy?: string;
+  decidedByRole?: "admin";
+  decidedAt?: string;
+  notes?: string;
+  createdAt: string;
+  updatedAt: string;
 }
 
 export interface AIResolution {

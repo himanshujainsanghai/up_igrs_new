@@ -649,6 +649,296 @@ export const getComplaintEmailHistory = async (
 };
 
 /**
+ * POST /api/v1/complaints/:id/officer/extension
+ * Officer requests extension
+ */
+export const requestOfficerExtension = async (
+  req: AuthRequest,
+  res: Response,
+  next: NextFunction
+): Promise<void> => {
+  try {
+    const officerId = req.user?.id;
+    if (!officerId) {
+      throw new UnauthorizedError("Authentication required");
+    }
+
+    const { id } = req.params;
+    const { days, reason } = req.body;
+
+    const request = await complaintsService.requestOfficerExtension(
+      id,
+      officerId,
+      Number(days),
+      reason
+    );
+
+    sendSuccess(res, request, 201);
+  } catch (error) {
+    next(error);
+  }
+};
+
+/**
+ * POST /api/v1/complaints/:id/admin/approve-extension
+ * Admin approves extension request for a complaint
+ *
+ * Request body (optional):
+ * {
+ *   "days": number,  // Optional: override the requested days
+ *   "notes": string  // Optional: admin notes for the approval
+ * }
+ *
+ * Response:
+ * {
+ *   "success": true,
+ *   "data": {
+ *     "timeBoundary": number,  // Updated time boundary in days
+ *     "extension": { ... }     // Approved extension request details
+ *   }
+ * }
+ */
+export const approveExtension = async (
+  req: AuthRequest,
+  res: Response,
+  next: NextFunction
+): Promise<void> => {
+  try {
+    const adminId = req.user?.id;
+    if (!adminId) {
+      throw new UnauthorizedError("Authentication required");
+    }
+
+    const { id } = req.params;
+    const { days, notes } = req.body;
+
+    // Validate days if provided
+    if (days !== undefined) {
+      const daysNum = Number(days);
+      if (isNaN(daysNum) || daysNum < 1 || daysNum > 365) {
+        throw new ValidationError(
+          "Days must be a valid number between 1 and 365"
+        );
+      }
+    }
+
+    // Validate notes length if provided
+    if (notes && typeof notes === "string" && notes.length > 1000) {
+      throw new ValidationError("Notes cannot exceed 1000 characters");
+    }
+
+    logger.info(
+      `Admin ${adminId} attempting to approve extension for complaint ${id}`
+    );
+
+    const result = await complaintsService.approveExtension(
+      id,
+      adminId,
+      days ? Number(days) : undefined,
+      notes
+    );
+
+    logger.info(
+      `Extension approved successfully for complaint ${id} by admin ${adminId}`
+    );
+
+    sendSuccess(res, result);
+  } catch (error) {
+    logger.error(
+      `Error approving extension for complaint ${req.params.id}:`,
+      error
+    );
+    next(error);
+  }
+};
+
+/**
+ * POST /api/v1/complaints/officer/notes
+ * Add officer note (inward/outward)
+ */
+export const addOfficerNote = async (
+  req: AuthRequest,
+  res: Response,
+  next: NextFunction
+): Promise<void> => {
+  try {
+    const officerId = req.user?.id;
+    if (!officerId) {
+      throw new UnauthorizedError("Authentication required");
+    }
+
+    const { complaint_id, note, type, attachments } = req.body;
+
+    if (!complaint_id) {
+      throw new ValidationError("complaint_id is required");
+    }
+
+    const officerNote = await complaintsService.addOfficerNote(
+      complaint_id,
+      note,
+      type,
+      officerId,
+      attachments
+    );
+
+    sendSuccess(res, officerNote, 201);
+  } catch (error) {
+    next(error);
+  }
+};
+
+/**
+ * GET /api/v1/complaints/officer/complaint/:id
+ * Officer combined complaint detail (complaint + extension requests + notes + attachments)
+ */
+export const getOfficerComplaintDetail = async (
+  req: AuthRequest,
+  res: Response,
+  next: NextFunction
+): Promise<void> => {
+  try {
+    const officerId = req.user?.id;
+    if (!officerId) {
+      throw new UnauthorizedError("Authentication required");
+    }
+
+    const { id } = req.params;
+    const data = await complaintsService.getOfficerComplaintDetail(
+      id,
+      officerId
+    );
+    sendSuccess(res, data);
+  } catch (error) {
+    next(error);
+  }
+};
+
+/**
+ * GET /api/v1/complaints/:id/officer-notes
+ * Get officer notes for a complaint
+ */
+export const getOfficerNotes = async (
+  req: AuthRequest,
+  res: Response,
+  next: NextFunction
+): Promise<void> => {
+  try {
+    const officerId = req.user?.id;
+    if (!officerId) {
+      throw new UnauthorizedError("Authentication required");
+    }
+
+    const { id } = req.params;
+    const notes = await complaintsService.getOfficerNotes(id, officerId);
+    sendSuccess(res, notes);
+  } catch (error) {
+    next(error);
+  }
+};
+
+/**
+ * POST /api/v1/complaints/officer/attachments
+ * Add officer attachment (expects S3 URL already generated)
+ */
+export const addOfficerAttachment = async (
+  req: AuthRequest,
+  res: Response,
+  next: NextFunction
+): Promise<void> => {
+  try {
+    const officerId = req.user?.id;
+    if (!officerId) {
+      throw new UnauthorizedError("Authentication required");
+    }
+
+    const {
+      complaint_id,
+      attachment_type,
+      file_url,
+      file_name,
+      file_type,
+      note_id,
+    } = req.body;
+
+    if (!complaint_id) {
+      throw new ValidationError("complaint_id is required");
+    }
+
+    const attachment = await complaintsService.addOfficerAttachment(
+      complaint_id,
+      attachment_type,
+      file_url,
+      file_name,
+      officerId,
+      note_id,
+      file_type
+    );
+
+    sendSuccess(res, attachment, 201);
+  } catch (error) {
+    next(error);
+  }
+};
+
+/**
+ * GET /api/v1/complaints/:id/officer-attachments
+ * Get officer attachments for a complaint
+ */
+export const getOfficerAttachments = async (
+  req: AuthRequest,
+  res: Response,
+  next: NextFunction
+): Promise<void> => {
+  try {
+    const officerId = req.user?.id;
+    if (!officerId) {
+      throw new UnauthorizedError("Authentication required");
+    }
+
+    const { id } = req.params;
+    const attachments = await complaintsService.getOfficerAttachments(
+      id,
+      officerId
+    );
+    sendSuccess(res, attachments);
+  } catch (error) {
+    next(error);
+  }
+};
+
+/**
+ * POST /api/v1/complaints/:id/officer/close
+ * Close complaint with closing details (officer only)
+ */
+export const closeComplaint = async (
+  req: AuthRequest,
+  res: Response,
+  next: NextFunction
+): Promise<void> => {
+  try {
+    const officerId = req.user?.id;
+    if (!officerId) {
+      throw new UnauthorizedError("Authentication required");
+    }
+
+    const { id } = req.params;
+    const { remarks, attachments, closingProof } = req.body;
+
+    const complaint = await complaintsService.closeComplaint(id, officerId, {
+      remarks,
+      attachments,
+      closingProof,
+      officerName: req.user?.name,
+      officerEmail: req.user?.email,
+    });
+
+    sendSuccess(res, complaint);
+  } catch (error) {
+    next(error);
+  }
+};
+
+/**
  * POST /api/v1/complaints/:id/assign-officer
  * Assign complaint to officer (intelligently creates new or uses existing)
  * Admin only

@@ -40,6 +40,10 @@ const ComplaintTimeline: React.FC<ComplaintTimelineProps> = ({
     (complaint as any).drafted_letter ||
     complaint.drafted_letter ||
     (complaint as any).draftedLetter;
+  const closingDetails =
+    (complaint as any).closingDetails ||
+    (complaint as any).closing_details ||
+    complaint.closingDetails;
   const isOfficerAssigned =
     (complaint as any).isOfficerAssigned !== undefined
       ? (complaint as any).isOfficerAssigned
@@ -53,14 +57,21 @@ const ComplaintTimeline: React.FC<ComplaintTimelineProps> = ({
       ? (complaint as any).is_extended
       : complaint.isExtended;
   const officerRemarks =
+    closingDetails?.remarks ||
     (complaint as any).officerRemarks ||
     (complaint as any).officer_remarks ||
     complaint.officerRemarks;
   const isClosed =
-    (complaint as any).isClosed !== undefined
-      ? (complaint as any).isClosed
+    (complaint as any).isComplaintClosed !== undefined
+      ? (complaint as any).isComplaintClosed
       : (complaint as any).is_closed !== undefined
       ? (complaint as any).is_closed
+      : (complaint as any).isClosed !== undefined
+      ? (complaint as any).isClosed
+      : complaint.isComplaintClosed !== undefined
+      ? complaint.isComplaintClosed
+      : closingDetails?.closedAt
+      ? true
       : complaint.isClosed;
   const createdAt =
     (complaint as any).created_at ||
@@ -71,6 +82,8 @@ const ComplaintTimeline: React.FC<ComplaintTimelineProps> = ({
     (complaint as any).assigned_time ||
     complaint.assignedTime;
   const closingTime =
+    closingDetails?.closedAt ||
+    (closingDetails as any)?.closed_at ||
     (complaint as any).closingTime ||
     (complaint as any).closing_time ||
     complaint.closingTime;

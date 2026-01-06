@@ -50,11 +50,24 @@ export interface IComplaint extends Document {
   arrivalTime?: Date; // When complaint arrived to officer
   assignedTime?: Date; // When complaint was assigned to officer
   timeBoundary?: number; // Time boundary in days (default: 7 days = 1 week)
-  isClosed?: boolean; // Whether complaint is closed by officer
-  closingTime?: Date; // When complaint was closed
-  officerRemarks?: string; // Officer's remarks/notes (max 2000 chars)
-  officerAttachments?: string[]; // Array of attachment URLs uploaded by officer
-  closingProof?: string; // URL to closing proof document
+  isComplaintClosed?: boolean; // Whether complaint is closed by officer
+  closingDetails?: {
+    closedAt?: Date; // When complaint was closed
+    remarks?: string; // Closing remarks/notes (max 2000 chars)
+    attachments?: Array<{
+      url: string; // Attachment URL
+      fileName?: string; // Optional original filename
+      fileType?: string; // Optional MIME/type hint
+      uploadedBy: string; // Officer/user who uploaded
+      uploadedAt: Date; // Timestamp of upload
+    }>;
+    closedByOfficer?: {
+      id?: string; // Officer user id (UUID)
+      name?: string; // Officer name
+      email?: string; // Officer email
+    };
+    closingProof?: string; // Optional proof URL
+  }; // All closing metadata grouped together
   isExtended?: boolean; // Whether time boundary was extended
   officerFeedback?: string; // Officer's feedback (max 2000 chars)
   estimated_resolution_date?: Date; // Expected completion date
@@ -298,24 +311,79 @@ const ComplaintSchema = new Schema<IComplaint>(
       default: 7, // 1 week in days
       min: [1, "Time boundary must be at least 1 day"],
     },
-    isClosed: {
+    isComplaintClosed: {
       type: Boolean,
       default: false,
       index: true,
     },
-    closingTime: {
-      type: Date,
-      required: false,
-    },
-    officerRemarks: {
-      type: String,
-      maxlength: [2000, "Officer remarks cannot exceed 2000 characters"],
-    },
-    officerAttachments: [
-      {
+    closingDetails: {
+      closedAt: {
+        type: Date,
+      },
+      remarks: {
+        type: String,
+        maxlength: [2000, "Closing remarks cannot exceed 2000 characters"],
+      },
+      attachments: [
+        {
+          url: {
+            type: String,
+            required: true,
+            validate: {
+              validator: (v: string) => {
+                try {
+                  new URL(v);
+                  return true;
+                } catch {
+                  return false;
+                }
+              },
+              message: "Invalid attachment URL",
+            },
+          },
+          fileName: {
+            type: String,
+            maxlength: [255, "File name cannot exceed 255 characters"],
+            trim: true,
+          },
+          fileType: {
+            type: String,
+            maxlength: [100, "File type cannot exceed 100 characters"],
+            trim: true,
+          },
+          uploadedBy: {
+            type: String,
+            required: true,
+            trim: true,
+          },
+          uploadedAt: {
+            type: Date,
+            default: Date.now,
+          },
+        },
+      ],
+      closedByOfficer: {
+        id: {
+          type: String,
+          trim: true,
+        },
+        name: {
+          type: String,
+          maxlength: [200, "Name cannot exceed 200 characters"],
+          trim: true,
+        },
+        email: {
+          type: String,
+          lowercase: true,
+          trim: true,
+          match: [/^\S+@\S+\.\S+$/, "Please provide a valid email"],
+        },
+      },
+      closingProof: {
         type: String,
         validate: {
           validator: (v: string) => {
+            if (!v) return true; // Optional
             try {
               new URL(v);
               return true;
@@ -323,23 +391,8 @@ const ComplaintSchema = new Schema<IComplaint>(
               return false;
             }
           },
-          message: "Invalid attachment URL",
+          message: "Invalid closing proof URL",
         },
-      },
-    ],
-    closingProof: {
-      type: String,
-      validate: {
-        validator: (v: string) => {
-          if (!v) return true; // Optional
-          try {
-            new URL(v);
-            return true;
-          } catch {
-            return false;
-          }
-        },
-        message: "Invalid closing proof URL",
       },
     },
     isExtended: {
@@ -450,7 +503,10 @@ ComplaintSchema.index({ contact_email: 1 });
 ComplaintSchema.index({ created_at: -1 });
 ComplaintSchema.index({ assigned_to_user_id: 1, status: 1 }); // For officer complaint queries
 ComplaintSchema.index({ assignedOfficer: 1, isOfficerAssigned: 1 }); // For officer assignment queries
-ComplaintSchema.index({ isClosed: 1, closingTime: 1 }); // For closed complaints queries
+ComplaintSchema.index({
+  isComplaintClosed: 1,
+  "closingDetails.closedAt": 1,
+}); // For closed complaints queries
 
 // Text search index (for MongoDB Atlas or with text search enabled)
 ComplaintSchema.index({ title: "text", description: "text", location: "text" });

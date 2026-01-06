@@ -18,6 +18,56 @@ router.get("/statistics", complaintsController.getStatistics); // Get statistics
 router.get("/track/phone/:phoneNumber", complaintsController.trackByPhone); // Track by phone (must be before /:id)
 router.post("/", complaintsController.createComplaint); // Create complaint
 
+// Officer self-service routes for notes & attachments (officer only)
+router.post(
+  "/officer/notes",
+  authenticate,
+  authorize("officer"),
+  complaintsController.addOfficerNote
+); // Add officer note (inward/outward)
+router.get(
+  "/:id/officer-notes",
+  authenticate,
+  authorize("officer"),
+  complaintsController.getOfficerNotes
+); // Get officer notes for a complaint
+router.post(
+  "/officer/attachments",
+  authenticate,
+  authorize("officer"),
+  complaintsController.addOfficerAttachment
+); // Add officer attachment (expects S3 URL in body)
+router.get(
+  "/:id/officer-attachments",
+  authenticate,
+  authorize("officer"),
+  complaintsController.getOfficerAttachments
+); // Get officer attachments for a complaint
+router.post(
+  "/:id/officer/extension",
+  authenticate,
+  authorize("officer"),
+  complaintsController.requestOfficerExtension
+); // Officer requests extension
+router.post(
+  "/:id/officer/close",
+  authenticate,
+  authorize("officer"),
+  complaintsController.closeComplaint
+); // Officer closes complaint with details
+router.post(
+  "/:id/admin/approve-extension",
+  authenticate,
+  authorize("admin"),
+  complaintsController.approveExtension
+); // Admin approves extension
+router.get(
+  "/officer/complaint/:id",
+  authenticate,
+  authorize("officer"),
+  complaintsController.getOfficerComplaintDetail
+); // Officer combined complaint detail
+
 // Protected routes (authentication required)
 // Specific routes must be before generic /:id route
 

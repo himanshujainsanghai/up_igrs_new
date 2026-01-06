@@ -2,6 +2,9 @@ import { Complaint } from "../models/Complaint";
 import { AIResolutionStep } from "../models/AIResolutionStep";
 import { ComplaintNote } from "../models/ComplaintNote";
 import { ComplaintDocument } from "../models/ComplaintDocument";
+import { OfficerNote } from "../models/OfficerNote";
+import { OfficerAttachment } from "../models/OfficerAttachment";
+import { ComplaintExtensionRequest } from "../models/ComplaintExtensionRequest";
 import { AIStepExecutionInstruction } from "../models/AIStepExecutionInstruction";
 import { NotFoundError, ValidationError } from "../utils/errors";
 import logger from "../config/logger";
@@ -51,6 +54,18 @@ export interface UpdateComplaintDto {
   resolution_notes?: string;
   estimated_resolution_date?: Date;
   actual_resolution_date?: Date;
+}
+
+export interface CloseComplaintDto {
+  remarks: string;
+  attachments?: Array<{
+    url: string;
+    fileName?: string;
+    fileType?: string;
+  }>;
+  closingProof?: string;
+  officerName?: string;
+  officerEmail?: string;
 }
 
 export interface ComplaintFilters {
@@ -178,11 +193,61 @@ export const getComplaintById = async (id: string) => {
     .sort({ created_at: -1 })
     .lean();
 
+  // Fetch extension requests for this complaint
+  const extensionRequests = await ComplaintExtensionRequest.find({
+    complaint_id: id,
+  })
+    .sort({ created_at: -1 })
+    .lean();
+
+  // Fetch assigned officer details if complaint is assigned
+  let assignedOfficerDetails = null;
+
+  // Check if complaint is assigned to an officer
+  if (complaint.isOfficerAssigned && complaint.assignedOfficer) {
+    try {
+      const officer = await Officer.findById(complaint.assignedOfficer).lean();
+
+      if (officer) {
+        assignedOfficerDetails = {
+          _id: officer._id?.toString(),
+          name: officer.name,
+          designation: officer.designation,
+          department: officer.department,
+          departmentCategory: officer.departmentCategory,
+          email: officer.email,
+          phone: officer.phone,
+          cug: officer.cug,
+          officeAddress: officer.officeAddress,
+          residenceAddress: officer.residenceAddress,
+          districtName: officer.districtName,
+          districtLgd: officer.districtLgd,
+          subdistrictName: officer.subdistrictName,
+          subdistrictLgd: officer.subdistrictLgd,
+          isDistrictLevel: officer.isDistrictLevel,
+          isSubDistrictLevel: officer.isSubDistrictLevel,
+          noOfComplaintsArrived: officer.noOfComplaintsArrived,
+          noOfComplaintsActed: officer.noOfComplaintsActed,
+          noOfComplaintsClosed: officer.noOfComplaintsClosed,
+          createdAt: officer.createdAt,
+          updatedAt: officer.updatedAt,
+        };
+      }
+    } catch (error) {
+      logger.error(
+        `Error fetching assigned officer details for complaint ${id}:`,
+        error
+      );
+    }
+  }
+
   return {
     ...complaint,
     ai_steps: steps,
     notes,
     documents,
+    extensionRequests,
+    assignedOfficerDetails,
   };
 };
 
@@ -378,6 +443,395 @@ export const getComplaintDocuments = async (complaintId: string) => {
     .lean();
 
   return documents;
+};
+
+/**
+ * Add officer note (inward/outward) for a complaint
+ * Assumes file uploads handled by client/S3; only URLs are persisted
+ */
+export const addOfficerNote = async (
+  complaintId: string,
+  note: string,
+  type: "inward" | "outward",
+  officerId: string,
+  attachments?: string[]
+) => {
+  if (!note || note.trim().length < 5) {
+    throw new ValidationError("Note must be at least 5 characters");
+  }
+
+  if (!["inward", "outward"].includes(type)) {
+    throw new ValidationError('type must be "inward" or "outward"');
+  }
+
+  const complaint = await Complaint.findOne({ id: complaintId });
+  if (!complaint) {
+    throw new NotFoundError("Complaint");
+  }
+
+  if (
+    complaint.assigned_to_user_id &&
+    complaint.assigned_to_user_id !== officerId
+  ) {
+    throw new ValidationError("You are not assigned to this complaint");
+  }
+
+  const officerNote = new OfficerNote({
+    complaint_id: complaintId,
+    note,
+    type,
+    officer_id: officerId,
+    attachments: attachments?.length ? attachments : undefined,
+  });
+
+  await officerNote.save();
+  return officerNote.toObject();
+};
+
+/**
+ * Get officer notes for a complaint (sorted newest first)
+ */
+export const getOfficerNotes = async (
+  complaintId: string,
+  officerId: string
+) => {
+  const complaint = await Complaint.findOne({ id: complaintId });
+  if (!complaint) {
+    throw new NotFoundError("Complaint");
+  }
+
+  if (
+    complaint.assigned_to_user_id &&
+    complaint.assigned_to_user_id !== officerId
+  ) {
+    throw new ValidationError("You are not assigned to this complaint");
+  }
+
+  const notes = await OfficerNote.find({ complaint_id: complaintId })
+    .sort({ created_at: -1 })
+    .lean();
+
+  return notes;
+};
+
+/**
+ * Add officer attachment for a complaint (S3 URL already generated on client)
+ */
+export const addOfficerAttachment = async (
+  complaintId: string,
+  attachmentType: "inward" | "outward",
+  fileUrl: string,
+  fileName: string,
+  officerId: string,
+  noteId?: string,
+  fileType?: string
+) => {
+  if (!fileUrl || !fileName) {
+    throw new ValidationError("file_url and file_name are required");
+  }
+
+  if (!["inward", "outward"].includes(attachmentType)) {
+    throw new ValidationError('attachment_type must be "inward" or "outward"');
+  }
+
+  const complaint = await Complaint.findOne({ id: complaintId });
+  if (!complaint) {
+    throw new NotFoundError("Complaint");
+  }
+
+  if (
+    complaint.assigned_to_user_id &&
+    complaint.assigned_to_user_id !== officerId
+  ) {
+    throw new ValidationError("You are not assigned to this complaint");
+  }
+
+  const attachment = new OfficerAttachment({
+    complaint_id: complaintId,
+    note_id: noteId,
+    attachment_type: attachmentType,
+    file_url: fileUrl,
+    file_name: fileName,
+    file_type: fileType,
+    uploaded_by: officerId,
+  });
+
+  await attachment.save();
+  return attachment.toObject();
+};
+
+/**
+ * Get officer attachments for a complaint (newest first)
+ */
+export const getOfficerAttachments = async (
+  complaintId: string,
+  officerId: string
+) => {
+  const complaint = await Complaint.findOne({ id: complaintId });
+  if (!complaint) {
+    throw new NotFoundError("Complaint");
+  }
+
+  if (
+    complaint.assigned_to_user_id &&
+    complaint.assigned_to_user_id !== officerId
+  ) {
+    throw new ValidationError("You are not assigned to this complaint");
+  }
+
+  const attachments = await OfficerAttachment.find({
+    complaint_id: complaintId,
+  })
+    .sort({ created_at: -1 })
+    .lean();
+
+  return attachments;
+};
+
+/**
+ * Officer: combined complaint detail with extension requests, notes, attachments
+ */
+export const getOfficerComplaintDetail = async (
+  complaintId: string,
+  officerId: string
+) => {
+  const complaint = await Complaint.findOne({ id: complaintId }).lean();
+  if (!complaint) {
+    throw new NotFoundError("Complaint");
+  }
+
+  if (
+    complaint.assigned_to_user_id &&
+    complaint.assigned_to_user_id !== officerId
+  ) {
+    throw new ValidationError("You are not assigned to this complaint");
+  }
+
+  const [extensionRequests, notes, attachments] = await Promise.all([
+    ComplaintExtensionRequest.find({ complaint_id: complaintId })
+      .sort({ created_at: -1 })
+      .lean(),
+    OfficerNote.find({ complaint_id: complaintId })
+      .sort({ created_at: -1 })
+      .lean(),
+    OfficerAttachment.find({ complaint_id: complaintId })
+      .sort({ created_at: -1 })
+      .lean(),
+  ]);
+
+  return {
+    complaint,
+    extension_requests: extensionRequests,
+    officer_notes: notes,
+    officer_attachments: attachments,
+  };
+};
+
+/**
+ * Close complaint by assigned officer with closing metadata
+ */
+export const closeComplaint = async (
+  complaintId: string,
+  officerId: string,
+  input: CloseComplaintDto
+) => {
+  if (!input.remarks || input.remarks.trim().length < 5) {
+    throw new ValidationError("Closing remarks must be at least 5 characters");
+  }
+
+  const complaint = await Complaint.findOne({ id: complaintId });
+  if (!complaint) {
+    throw new NotFoundError("Complaint");
+  }
+
+  if (complaint.isComplaintClosed) {
+    throw new ValidationError("Complaint is already closed");
+  }
+
+  if (
+    complaint.assigned_to_user_id &&
+    complaint.assigned_to_user_id !== officerId
+  ) {
+    throw new ValidationError("You are not assigned to this complaint");
+  }
+
+  const now = new Date();
+
+  const attachments =
+    input.attachments?.map((att, index) => {
+      if (!att?.url || typeof att.url !== "string") {
+        throw new ValidationError(
+          `attachments[${index}].url is required and must be a string`
+        );
+      }
+
+      return {
+        url: att.url,
+        fileName: att.fileName,
+        fileType: att.fileType,
+        uploadedBy: officerId,
+        uploadedAt: now,
+      };
+    }) || [];
+
+  let closedByOfficer = {
+    id: officerId,
+    name: input.officerName,
+    email: input.officerEmail,
+  };
+
+  try {
+    const officerUser = await User.findOne({ id: officerId }).lean();
+    if (officerUser) {
+      closedByOfficer = {
+        id: officerId,
+        name: officerUser.name || input.officerName,
+        email: officerUser.email || input.officerEmail,
+      };
+    }
+  } catch (error) {
+    logger.warn(
+      `Could not fetch officer details for closing complaint ${complaintId}:`,
+      error
+    );
+  }
+
+  complaint.isComplaintClosed = true;
+  complaint.status = "resolved";
+  complaint.actual_resolution_date = now;
+  complaint.closingDetails = {
+    closedAt: now,
+    remarks: input.remarks.trim(),
+    attachments: attachments.length ? attachments : undefined,
+    closedByOfficer,
+    closingProof: input.closingProof,
+  };
+  complaint.updated_at = now;
+
+  await complaint.save();
+  return complaint.toObject();
+};
+
+/**
+ * Officer requests extension of time boundary
+ */
+export const requestOfficerExtension = async (
+  complaintId: string,
+  officerId: string,
+  days: number,
+  reason?: string
+) => {
+  if (!days || days < 1 || days > 365) {
+    throw new ValidationError("days must be between 1 and 365");
+  }
+
+  const complaint = await Complaint.findOne({ id: complaintId });
+  if (!complaint) {
+    throw new NotFoundError("Complaint");
+  }
+
+  if (
+    complaint.assigned_to_user_id &&
+    complaint.assigned_to_user_id !== officerId
+  ) {
+    throw new ValidationError("You are not assigned to this complaint");
+  }
+
+  const request = new ComplaintExtensionRequest({
+    complaint_id: complaintId,
+    requested_by: officerId,
+    requested_by_role: "officer",
+    days_requested: days,
+    reason,
+    status: "pending",
+  });
+
+  await request.save();
+  return request.toObject();
+};
+
+/**
+ * Admin approves extension (defaults to latest pending request)
+ * Updates extension request status, approval details, and complaint time boundary
+ */
+export const approveExtension = async (
+  complaintId: string,
+  adminId: string,
+  days?: number,
+  notes?: string
+) => {
+  // Find the complaint
+  const complaint = await Complaint.findOne({ id: complaintId });
+  if (!complaint) {
+    throw new NotFoundError("Complaint");
+  }
+
+  // Find the latest pending extension request for this complaint
+  const pendingRequest = await ComplaintExtensionRequest.findOne({
+    complaint_id: complaintId,
+    status: "pending",
+  }).sort({ created_at: -1 });
+
+  if (!pendingRequest) {
+    throw new ValidationError("No pending extension request found");
+  }
+
+  // Validate extension days
+  const extensionDays = days ?? pendingRequest.days_requested;
+
+  if (!extensionDays || extensionDays < 1 || extensionDays > 365) {
+    throw new ValidationError("Extension days must be between 1 and 365");
+  }
+
+  // Use transaction to ensure atomicity
+  const session = await mongoose.startSession();
+  session.startTransaction();
+
+  try {
+    // Update extension request with approval details
+    pendingRequest.status = "approved";
+    pendingRequest.decided_by = adminId;
+    pendingRequest.decided_by_role = "admin";
+    pendingRequest.decided_at = new Date();
+    pendingRequest.updated_at = new Date(); // Explicitly update updated_at
+    if (notes) {
+      pendingRequest.notes = notes;
+    }
+    // Allow admin to override days if provided
+    if (days !== undefined) {
+      pendingRequest.days_requested = extensionDays;
+    }
+    await pendingRequest.save({ session });
+
+    // Update complaint: extend time boundary and mark as extended
+    const currentTimeBoundary = complaint.timeBoundary || 7; // Default 7 days if not set
+    complaint.timeBoundary = currentTimeBoundary + extensionDays;
+    complaint.isExtended = true;
+    complaint.updated_at = new Date(); // Explicitly update updated_at
+    await complaint.save({ session });
+
+    // Commit transaction
+    await session.commitTransaction();
+
+    logger.info(
+      `Extension request ${pendingRequest.id} approved by admin ${adminId} for complaint ${complaintId}. Extended by ${extensionDays} days.`
+    );
+
+    return {
+      timeBoundary: complaint.timeBoundary,
+      extension: pendingRequest.toObject(),
+    };
+  } catch (error) {
+    // Rollback transaction on error
+    await session.abortTransaction();
+    logger.error(
+      `Error approving extension for complaint ${complaintId}:`,
+      error
+    );
+    throw error;
+  } finally {
+    session.endSession();
+  }
 };
 
 /**
