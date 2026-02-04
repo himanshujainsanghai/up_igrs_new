@@ -3,16 +3,33 @@
  * Maps to backend /api/v1/meetings routes
  */
 
-import apiClient from '@/lib/api';
-import { ApiResponse, PaginatedResponse, Meeting, MeetingRequest } from '@/types';
+import apiClient from "@/lib/api";
+import {
+  ApiResponse,
+  PaginatedResponse,
+  Meeting,
+  MeetingRequest,
+} from "@/types";
 
 export const meetingsService = {
   /**
    * Get all meetings
    * GET /api/v1/meetings
+   * @param status - optional: pending | approved | rejected | completed (omit or 'all' for all)
    */
-  async getMeetings(page = 1, limit = 20): Promise<PaginatedResponse<Meeting>> {
-    return await apiClient.get<PaginatedResponse<Meeting>>(`/meetings?page=${page}&limit=${limit}`);
+  async getMeetings(
+    page = 1,
+    limit = 20,
+    status?: string,
+  ): Promise<PaginatedResponse<Meeting>> {
+    const params = new URLSearchParams({
+      page: String(page),
+      limit: String(limit),
+    });
+    if (status && status !== "all") params.set("status", status);
+    return await apiClient.get<PaginatedResponse<Meeting>>(
+      `/meetings?${params.toString()}`,
+    );
   },
 
   /**
@@ -20,7 +37,9 @@ export const meetingsService = {
    * GET /api/v1/meetings/:id
    */
   async getMeetingById(id: string): Promise<Meeting> {
-    const response = await apiClient.get<ApiResponse<Meeting>>(`/meetings/${id}`);
+    const response = await apiClient.get<ApiResponse<Meeting>>(
+      `/meetings/${id}`,
+    );
     return response.data;
   },
 
@@ -32,18 +51,27 @@ export const meetingsService = {
   async createMeeting(meeting: MeetingRequest): Promise<Meeting> {
     // Transform to backend format (snake_case)
     const backendData: any = {
-      requester_name: meeting.name || 'Anonymous',
-      requester_email: meeting.email || `${meeting.phone || 'user'}@temp.com`,
+      requester_name: meeting.name || "Anonymous",
+      requester_email: meeting.email || `${meeting.phone || "user"}@temp.com`,
       requester_phone: meeting.phone,
-      requester_area: meeting.location || '',
-      meeting_subject: meeting.subject || `Meeting Request${meeting.complaintId ? ` - Complaint ${meeting.complaintId}` : ''}`,
+      requester_area: meeting.location || "",
+      meeting_subject:
+        meeting.subject ||
+        `Meeting Request${meeting.complaintId ? ` - Complaint ${meeting.complaintId}` : ""}`,
       purpose: meeting.reason,
-      meeting_type: meeting.complaintId ? 'complaint_followup' : 'general_inquiry',
-      preferred_date: meeting.requestedDate ? new Date(meeting.requestedDate) : undefined,
+      meeting_type: meeting.complaintId
+        ? "complaint_followup"
+        : "general_inquiry",
+      preferred_date: meeting.requestedDate
+        ? new Date(meeting.requestedDate)
+        : undefined,
       preferred_time: meeting.requestedTime,
     };
 
-    const response = await apiClient.post<ApiResponse<Meeting>>('/meetings', backendData);
+    const response = await apiClient.post<ApiResponse<Meeting>>(
+      "/meetings",
+      backendData,
+    );
     return response.data;
   },
 
@@ -52,7 +80,9 @@ export const meetingsService = {
    * GET /api/v1/meetings/status/:status
    */
   async getMeetingsByStatus(status: string): Promise<Meeting[]> {
-    const response = await apiClient.get<ApiResponse<Meeting[]>>(`/meetings/status/${status}`);
+    const response = await apiClient.get<ApiResponse<Meeting[]>>(
+      `/meetings/status/${status}`,
+    );
     return response.data;
   },
 
@@ -61,7 +91,10 @@ export const meetingsService = {
    * PUT /api/v1/meetings/:id
    */
   async updateMeeting(id: string, updates: Partial<Meeting>): Promise<Meeting> {
-    const response = await apiClient.put<ApiResponse<Meeting>>(`/meetings/${id}`, updates);
+    const response = await apiClient.put<ApiResponse<Meeting>>(
+      `/meetings/${id}`,
+      updates,
+    );
     return response.data;
   },
 
@@ -77,8 +110,13 @@ export const meetingsService = {
    * Add meeting attachment (admin only)
    * POST /api/v1/meetings/:id/attachments
    */
-  async addAttachment(id: string, attachment: { fileName: string; fileUrl: string; fileType: string }): Promise<void> {
-    await apiClient.post<ApiResponse<void>>(`/meetings/${id}/attachments`, attachment);
+  async addAttachment(
+    id: string,
+    attachment: { fileName: string; fileUrl: string; fileType: string },
+  ): Promise<void> {
+    await apiClient.post<ApiResponse<void>>(
+      `/meetings/${id}/attachments`,
+      attachment,
+    );
   },
 };
-

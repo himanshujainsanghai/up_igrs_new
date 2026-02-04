@@ -1,9 +1,11 @@
 import { Response, NextFunction } from "express";
 import { AuthRequest } from "../middleware/auth.middleware";
 import { Complaint } from "../models/Complaint";
+import { ComplaintDocumentSummary } from "../models/ComplaintDocumentSummary";
 import { AIResolutionStep } from "../models/AIResolutionStep";
 import * as aiService from "../services/ai.service";
 import * as complaintsService from "../services/complaints.service";
+import * as complaintTimeline from "../services/complaintTimeline.service";
 import { sendSuccess, sendError } from "../utils/response";
 import { NotFoundError } from "../utils/errors";
 import logger from "../config/logger";
@@ -229,6 +231,16 @@ export const researchRelatedIssues = async (
       }
     );
 
+    try {
+      await complaintTimeline.appendResearchCompleted(
+        id,
+        { updated: true },
+        req.user?.id ? { user_id: req.user.id, role: "admin" } : undefined
+      );
+    } catch (err) {
+      logger.warn("Timeline appendResearchCompleted failed:", err);
+    }
+
     sendSuccess(res, { research });
   } catch (error) {
     next(error);
@@ -268,6 +280,23 @@ export const findComplaintOfficers = async (
         updated_at: new Date(),
       }
     );
+
+    try {
+      const primary = officers.primary_officer;
+      if (primary) {
+        await complaintTimeline.appendOfficerSelected(
+          id,
+          {
+            officer_name: primary.name,
+            officer_email: primary.email,
+            officer_designation: primary.designation,
+          },
+          req.user?.id ? { user_id: req.user.id, role: "admin" } : undefined
+        );
+      }
+    } catch (err) {
+      logger.warn("Timeline appendOfficerSelected failed:", err);
+    }
 
     sendSuccess(res, { officers });
   } catch (error) {
@@ -328,6 +357,29 @@ export const draftComplaintLetter = async (
     // Save letter and selected officer to complaint
     await Complaint.updateOne({ id }, updateData);
 
+    try {
+      const hadLetter = !!complaint.drafted_letter;
+      const toName = letterResponse.letter?.to || selectedOfficer?.name;
+      if (hadLetter) {
+        await complaintTimeline.appendLetterRedrafted(
+          id,
+          { to_name: toName },
+          req.user?.id ? { user_id: req.user.id, role: "admin" } : undefined
+        );
+      } else {
+        await complaintTimeline.appendLetterDrafted(
+          id,
+          {
+            to_name: toName,
+            to_designation: selectedOfficer?.designation,
+          },
+          req.user?.id ? { user_id: req.user.id, role: "admin" } : undefined
+        );
+      }
+    } catch (err) {
+      logger.warn("Timeline append letter event failed:", err);
+    }
+
     sendSuccess(res, letterResponse);
   } catch (error) {
     next(error);
@@ -359,7 +411,143 @@ export const generateComplaintActions = async (
       complaint.location || ""
     );
 
+    try {
+      const actionCount = Array.isArray(actions?.actions)
+        ? actions.actions.length
+        : actions
+        ? 1
+        : 0;
+      await complaintTimeline.appendActionsGenerated(
+        id,
+        { action_count: actionCount },
+        req.user?.id ? { user_id: req.user.id, role: "admin" } : undefined
+      );
+    } catch (err) {
+      logger.warn("Timeline appendActionsGenerated failed:", err);
+    }
+
     sendSuccess(res, actions);
+  } catch (error) {
+    next(error);
+  }
+};
+
+/**
+ * POST /api/v1/ai/complaints/:id/summarize-documents
+ * Generate comprehensive summary from complaint attachments (images[]).
+ * Body: { useComplaintContext?: boolean, user_prompt?: string } — user_prompt is optional instruction (e.g. "Focus on dates").
+ * Results are always stored in ComplaintDocumentSummary.
+ */
+export const summarizeDocuments = async (
+  req: AuthRequest,
+  res: Response,
+  next: NextFunction
+): Promise<void> => {
+  try {
+    const { id } = req.params;
+    const useComplaintContext = req.body.useComplaintContext !== false;
+    const userPrompt =
+      typeof req.body.user_prompt === "string"
+        ? req.body.user_prompt.trim() || undefined
+        : undefined;
+
+    const complaint = await Complaint.findOne({ id }).lean();
+    if (!complaint) {
+      throw new NotFoundError("Complaint");
+    }
+
+    const documentUrls = Array.isArray(complaint.images)
+      ? complaint.images
+      : [];
+    if (documentUrls.length === 0) {
+      sendError(
+        res,
+        "No documents to summarize. This complaint has no attachments in images[].",
+        400,
+        "VALIDATION_ERROR"
+      );
+      return;
+    }
+
+    const complaintContext = useComplaintContext
+      ? {
+          title: complaint.title,
+          description: complaint.description,
+          contact_name: complaint.contact_name,
+          contact_email: complaint.contact_email,
+          contact_phone: complaint.contact_phone,
+          location: complaint.location,
+          category: complaint.category,
+          subdistrict_name: complaint.subdistrict_name,
+          district_name: complaint.district_name,
+          village_name: complaint.village_name,
+        }
+      : undefined;
+
+    logger.info(
+      `Summarizing ${documentUrls.length} documents for complaint ${id}, useComplaintContext=${useComplaintContext}`
+    );
+    const actor = req.user?.id
+      ? { user_id: req.user.id, role: "admin" as const }
+      : undefined;
+    const { summaryText, summaryRecord } =
+      await aiService.summarizeAndSaveDocuments({
+        complaintId: id,
+        documentUrls,
+        useComplaintContext,
+        complaintContext,
+        userPrompt,
+        actor,
+      });
+
+    sendSuccess(res, {
+      summary: summaryText,
+      useComplaintContext,
+      user_prompt: summaryRecord.user_prompt,
+      record: {
+        id: summaryRecord.id,
+        complaint_id: summaryRecord.complaint_id,
+        summary: summaryRecord.summary,
+        use_complaint_context: summaryRecord.use_complaint_context,
+        document_count: summaryRecord.document_count,
+        user_prompt: summaryRecord.user_prompt,
+        created_at: summaryRecord.created_at,
+      },
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+
+/**
+ * GET /api/v1/ai/complaints/:id/summarize-documents
+ * List all document summary records for a complaint (newest first). Use for "current" (first) and history.
+ */
+export const listDocumentSummaries = async (
+  req: AuthRequest,
+  res: Response,
+  next: NextFunction
+): Promise<void> => {
+  try {
+    const { id } = req.params;
+
+    const complaint = await Complaint.findOne({ id }).lean();
+    if (!complaint) {
+      throw new NotFoundError("Complaint");
+    }
+
+    const summaries = await ComplaintDocumentSummary.find({ complaint_id: id })
+      .sort({ created_at: -1 })
+      .lean()
+      .select(
+        "id complaint_id summary use_complaint_context document_count user_prompt created_at"
+      );
+
+    sendSuccess(res, {
+      complaint_id: id,
+      summaries,
+      count: summaries.length,
+    });
   } catch (error) {
     next(error);
   }

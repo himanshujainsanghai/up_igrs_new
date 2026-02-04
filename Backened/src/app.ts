@@ -13,6 +13,11 @@ import logger from "./config/logger";
  */
 const app: Application = express();
 
+// Trust proxy - required when behind reverse proxy (ngrok, nginx, load balancer)
+// This ensures correct client IP detection for rate limiting and logging
+// Value of 1 means trust the first proxy in the chain
+app.set("trust proxy", 1);
+
 // Security middleware
 app.use(helmet());
 
@@ -52,7 +57,7 @@ const apiLimiter = rateLimit({
   legacyHeaders: false,
   skip: (req) => {
     // Skip rate limiting for auth routes (they have their own limiter)
-    return req.path.startsWith('/api/v1/auth');
+    return req.path.startsWith("/api/v1/auth");
   },
 });
 
@@ -90,6 +95,8 @@ import villageRoutes from "./routes/village.routes";
 import districtRoutes from "./routes/district.routes";
 import demographicsRoutes from "./routes/demographics.routes";
 import usersRoutes from "./routes/users.routes";
+import whatsappRoutes from "./routes/whatsapp.routes";
+import notificationsRoutes from "./routes/notifications.routes";
 
 app.use("/api/v1/complaints", complaintsRoutes);
 app.use("/api/v1/meetings", meetingsRoutes);
@@ -108,6 +115,8 @@ app.use("/api/v1/villages", villageRoutes);
 app.use("/api/v1/districts", districtRoutes);
 app.use("/api/v1/demographics", demographicsRoutes);
 app.use("/api/v1/users", usersRoutes);
+app.use("/api/v1/whatsapp", whatsappRoutes);
+app.use("/api/v1/notifications", notificationsRoutes);
 
 // 404 handler
 app.use(notFoundHandler);

@@ -84,7 +84,7 @@ const OfficerComplaintDetailPage: React.FC = () => {
   const [isUploadingFile, setIsUploadingFile] = useState(false);
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const [documentType, setDocumentType] = useState<"inward" | "outward">(
-    "inward"
+    "inward",
   );
   const [filePreview, setFilePreview] = useState<string | null>(null);
 
@@ -326,7 +326,7 @@ const OfficerComplaintDetailPage: React.FC = () => {
       setDocumentType("inward");
       // Reset file input
       const fileInput = document.getElementById(
-        "file-upload-input"
+        "file-upload-input",
       ) as HTMLInputElement;
       if (fileInput) fileInput.value = "";
       await loadComplaint();
@@ -349,6 +349,284 @@ const OfficerComplaintDetailPage: React.FC = () => {
   const isImageFile = (url: string): boolean => {
     return /\.(jpg|jpeg|png|gif|webp)$/i.test(url);
   };
+
+  const handleViewDocument = async (fileUrl: string) => {
+    if (!fileUrl) return;
+    try {
+      const viewUrl = await uploadService.getPresignedViewUrl(fileUrl);
+      window.open(viewUrl, "_blank", "noopener,noreferrer");
+    } catch (error: any) {
+      toast.error(error.message || "Failed to open document");
+    }
+  };
+
+  const parseDateValue = (value?: string | Date | null) => {
+    if (!value) return null;
+    const date = new Date(value);
+    return Number.isNaN(date.getTime()) ? null : date;
+  };
+
+  const formatTimelineDate = (date: Date) => {
+    return date.toLocaleString("en-IN", {
+      day: "numeric",
+      month: "short",
+      year: "numeric",
+      hour: "2-digit",
+      minute: "2-digit",
+    });
+  };
+
+  const buildOfficerTimeline = () => {
+    if (!complaint) return [];
+
+    const events: Array<{
+      id: string;
+      title: string;
+      date: Date;
+      description?: string;
+      badge?: { text: string; className: string };
+      icon: React.ReactNode;
+      iconBg: string;
+    }> = [];
+
+    const createdAt = parseDateValue(
+      (complaint as any).created_at || complaint.createdAt,
+    );
+    const arrivalTime = parseDateValue(
+      (complaint as any).arrivalTime ||
+        (complaint as any).arrival_time ||
+        complaint.arrivalTime,
+    );
+    const assignedTime = parseDateValue(
+      (complaint as any).assignedTime ||
+        (complaint as any).assigned_time ||
+        complaint.assignedTime,
+    );
+    const timeBoundary = complaint.timeBoundary || 7;
+    const deadlineBase = arrivalTime || assignedTime || createdAt;
+
+    if (createdAt) {
+      events.push({
+        id: "created",
+        title: "Complaint submitted",
+        date: createdAt,
+        icon: <FileText className="w-4 h-4 text-[#011a60]" />,
+        iconBg: "bg-[#011a60]/10",
+      });
+    }
+
+    if (assignedTime) {
+      events.push({
+        id: "assigned",
+        title: "Assigned to officer",
+        date: assignedTime,
+        icon: <User className="w-4 h-4 text-indigo-700" />,
+        iconBg: "bg-indigo-100",
+      });
+    }
+
+    if (arrivalTime) {
+      events.push({
+        id: "arrival",
+        title: "Arrived to officer",
+        date: arrivalTime,
+        icon: <Clock className="w-4 h-4 text-blue-700" />,
+        iconBg: "bg-blue-100",
+      });
+    }
+
+    if (deadlineBase) {
+      const deadline = new Date(deadlineBase);
+      deadline.setDate(deadline.getDate() + timeBoundary);
+      events.push({
+        id: "deadline",
+        title: `Deadline (${timeBoundary} days)`,
+        date: deadline,
+        description: "Time boundary completion date",
+        badge: {
+          text: "Deadline",
+          className: "bg-slate-100 text-slate-700",
+        },
+        icon: <Calendar className="w-4 h-4 text-slate-700" />,
+        iconBg: "bg-slate-100",
+      });
+
+      const compareDate = parseDateValue(closedAt) || new Date();
+      if (compareDate.getTime() > deadline.getTime()) {
+        const overdueDays = Math.ceil(
+          (compareDate.getTime() - deadline.getTime()) / (1000 * 60 * 60 * 24),
+        );
+        events.push({
+          id: "overdue",
+          title: "Overdue",
+          date: compareDate,
+          description: `${overdueDays} ${
+            overdueDays === 1 ? "day" : "days"
+          } past deadline`,
+          badge: {
+            text: "Overdue",
+            className: "bg-red-100 text-red-700",
+          },
+          icon: <AlertTriangle className="w-4 h-4 text-red-600" />,
+          iconBg: "bg-red-100",
+        });
+      } else if (!isComplaintClosed) {
+        const remainingDays = Math.ceil(
+          (deadline.getTime() - compareDate.getTime()) / (1000 * 60 * 60 * 24),
+        );
+        events.push({
+          id: "remaining",
+          title: "Time remaining",
+          date: compareDate,
+          description: `${remainingDays} ${
+            remainingDays === 1 ? "day" : "days"
+          } remaining until deadline`,
+          badge: {
+            text: "On track",
+            className: "bg-emerald-100 text-emerald-700",
+          },
+          icon: <CheckCircle className="w-4 h-4 text-emerald-700" />,
+          iconBg: "bg-emerald-100",
+        });
+      }
+    }
+
+    notes.forEach((note) => {
+      const noteDate = parseDateValue(note.createdAt);
+      if (!noteDate) return;
+      const isInward = note.type === "inward";
+      events.push({
+        id: `note-${note._id}`,
+        title: isInward ? "Inward note added" : "Outward note added",
+        date: noteDate,
+        description: note.content,
+        badge: {
+          text: isInward ? "Inward" : "Outward",
+          className: isInward
+            ? "bg-blue-100 text-blue-700"
+            : "bg-green-100 text-green-700",
+        },
+        icon: isInward ? (
+          <ArrowDownCircle className="w-4 h-4 text-blue-600" />
+        ) : (
+          <ArrowUpCircle className="w-4 h-4 text-green-600" />
+        ),
+        iconBg: isInward ? "bg-blue-100" : "bg-green-100",
+      });
+    });
+
+    attachments.forEach((doc) => {
+      const attachmentDate = parseDateValue(doc.createdAt);
+      if (!attachmentDate) return;
+      const isInward = doc.attachmentType === "inward";
+      events.push({
+        id: `attachment-${doc._id}`,
+        title: isInward
+          ? "Inward document uploaded"
+          : "Outward document uploaded",
+        date: attachmentDate,
+        description: doc.fileName,
+        badge: {
+          text: isInward ? "Inward" : "Outward",
+          className: isInward
+            ? "bg-blue-100 text-blue-700"
+            : "bg-green-100 text-green-700",
+        },
+        icon: <Upload className="w-4 h-4 text-[#011a60]" />,
+        iconBg: "bg-[#011a60]/10",
+      });
+    });
+
+    extensionRequests.forEach((request) => {
+      const requestedAt = parseDateValue(request.createdAt);
+      if (requestedAt) {
+        events.push({
+          id: `extension-request-${request._id}`,
+          title: "Extension requested",
+          date: requestedAt,
+          description: `${request.daysRequested} ${
+            request.daysRequested === 1 ? "day" : "days"
+          } requested${request.reason ? ` • ${request.reason}` : ""}`,
+          badge: {
+            text: request.status === "pending" ? "Pending" : "Requested",
+            className:
+              request.status === "pending"
+                ? "bg-yellow-100 text-yellow-700"
+                : "bg-orange-100 text-orange-700",
+          },
+          icon: <Clock className="w-4 h-4 text-orange-600" />,
+          iconBg: "bg-orange-100",
+        });
+      }
+
+      const decidedAt = parseDateValue(request.decidedAt);
+      if (decidedAt && request.status !== "pending") {
+        const isApproved = request.status === "approved";
+        events.push({
+          id: `extension-${request._id}-${request.status}`,
+          title: isApproved ? "Extension approved" : "Extension rejected",
+          date: decidedAt,
+          description: request.notes,
+          badge: {
+            text: isApproved ? "Approved" : "Rejected",
+            className: isApproved
+              ? "bg-emerald-100 text-emerald-700"
+              : "bg-red-100 text-red-700",
+          },
+          icon: isApproved ? (
+            <CheckCircle className="w-4 h-4 text-emerald-600" />
+          ) : (
+            <XCircle className="w-4 h-4 text-red-600" />
+          ),
+          iconBg: isApproved ? "bg-emerald-100" : "bg-red-100",
+        });
+      }
+    });
+
+    closingAttachments.forEach((attachment, index) => {
+      const uploadedAt = parseDateValue(
+        attachment.uploadedAt || (attachment as any).uploaded_at || closedAt,
+      );
+      if (!uploadedAt) return;
+      events.push({
+        id: `closing-attachment-${index}`,
+        title: "Closing document uploaded",
+        date: uploadedAt,
+        description:
+          attachment.fileName ||
+          (attachment as any).file_name ||
+          `Attachment ${index + 1}`,
+        badge: {
+          text: "Closing proof",
+          className: "bg-slate-100 text-slate-700",
+        },
+        icon: <Upload className="w-4 h-4 text-[#011a60]" />,
+        iconBg: "bg-[#011a60]/10",
+      });
+    });
+
+    const closedAtDate = parseDateValue(closedAt);
+    if (closedAtDate) {
+      events.push({
+        id: "closed",
+        title: "Complaint closed",
+        date: closedAtDate,
+        description: closingRemarksValue,
+        badge: {
+          text: "Closed",
+          className: "bg-emerald-100 text-emerald-700",
+        },
+        icon: <CheckCircle className="w-4 h-4 text-emerald-600" />,
+        iconBg: "bg-emerald-100",
+      });
+    }
+
+    return events
+      .filter((event) => event.date)
+      .sort((a, b) => a.date.getTime() - b.date.getTime());
+  };
+
+  const timelineEvents = buildOfficerTimeline();
 
   if (loading) {
     return (
@@ -600,7 +878,8 @@ const OfficerComplaintDetailPage: React.FC = () => {
                     <p className="text-foreground mt-1">
                       {(complaint as any).created_at || complaint.createdAt
                         ? new Date(
-                            (complaint as any).created_at || complaint.createdAt
+                            (complaint as any).created_at ||
+                              complaint.createdAt,
                           ).toLocaleString()
                         : "N/A"}
                     </p>
@@ -612,7 +891,7 @@ const OfficerComplaintDetailPage: React.FC = () => {
                       </Label>
                       <p className="text-foreground mt-1">
                         {new Date(
-                          (complaint as any).updated_at
+                          (complaint as any).updated_at,
                         ).toLocaleString()}
                       </p>
                     </div>
@@ -624,7 +903,7 @@ const OfficerComplaintDetailPage: React.FC = () => {
                       </Label>
                       <p className="text-foreground mt-1">
                         {new Date(
-                          (complaint as any).arrivalTime
+                          (complaint as any).arrivalTime,
                         ).toLocaleString()}
                       </p>
                     </div>
@@ -636,12 +915,61 @@ const OfficerComplaintDetailPage: React.FC = () => {
                       </Label>
                       <p className="text-foreground mt-1">
                         {new Date(
-                          (complaint as any).assignedTime
+                          (complaint as any).assignedTime,
                         ).toLocaleString()}
                       </p>
                     </div>
                   )}
                 </div>
+              </div>
+
+              {/* Officer Timeline */}
+              <div className="space-y-3">
+                <h3 className="text-sm font-semibold text-foreground uppercase tracking-wide border-b pb-2">
+                  Officer Timeline
+                </h3>
+                {timelineEvents.length === 0 ? (
+                  <div className="text-sm text-muted-foreground">
+                    No timeline events available yet.
+                  </div>
+                ) : (
+                  <div className="space-y-4">
+                    {timelineEvents.map((event) => (
+                      <div
+                        key={event.id}
+                        className="flex items-start gap-3 rounded-lg border border-[#011a60]/10 bg-white p-3"
+                      >
+                        <div
+                          className={`flex h-9 w-9 items-center justify-center rounded-full ${event.iconBg}`}
+                        >
+                          {event.icon}
+                        </div>
+                        <div className="flex-1 min-w-0">
+                          <div className="flex items-start justify-between gap-2">
+                            <p className="text-sm font-semibold text-foreground">
+                              {event.title}
+                            </p>
+                            <span className="text-xs text-muted-foreground whitespace-nowrap">
+                              {formatTimelineDate(event.date)}
+                            </span>
+                          </div>
+                          {event.badge && (
+                            <Badge
+                              className={`mt-1 border-0 text-xs ${event.badge.className}`}
+                            >
+                              {event.badge.text}
+                            </Badge>
+                          )}
+                          {event.description && (
+                            <p className="mt-2 text-xs text-muted-foreground whitespace-pre-wrap">
+                              {event.description}
+                            </p>
+                          )}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
               </div>
 
               {/* Assignment Information */}
@@ -723,7 +1051,7 @@ const OfficerComplaintDetailPage: React.FC = () => {
                               <ImageIcon className="w-6 h-6 text-white opacity-0 group-hover:opacity-100 transition-opacity" />
                             </div>
                           </a>
-                        )
+                        ),
                       )}
                     </div>
                   </div>
@@ -737,12 +1065,11 @@ const OfficerComplaintDetailPage: React.FC = () => {
                   </h3>
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
                     {complaint.documents.map((doc, index) => (
-                      <a
+                      <button
                         key={index}
-                        href={doc.fileUrl}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className="flex items-center gap-3 p-3 border border-[#011a60]/30 rounded-lg hover:border-[#011a60]/60 transition-all"
+                        type="button"
+                        onClick={() => handleViewDocument(doc.fileUrl)}
+                        className="flex items-center gap-3 p-3 border border-[#011a60]/30 rounded-lg hover:border-[#011a60]/60 transition-all w-full text-left"
                       >
                         <FileText className="w-5 h-5 text-foreground" />
                         <div className="flex-1 min-w-0">
@@ -756,7 +1083,7 @@ const OfficerComplaintDetailPage: React.FC = () => {
                           )}
                         </div>
                         <ExternalLink className="w-4 h-4 text-muted-foreground" />
-                      </a>
+                      </button>
                     ))}
                   </div>
                 </div>
@@ -771,7 +1098,7 @@ const OfficerComplaintDetailPage: React.FC = () => {
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
                     {closingAttachments.map(
                       (attachment: any, index: number) => {
-                        const url = attachment.url;
+                        const url = attachment.url || attachment.fileUrl;
                         const fileName =
                           attachment.fileName ||
                           attachment.file_name ||
@@ -784,12 +1111,11 @@ const OfficerComplaintDetailPage: React.FC = () => {
                           attachment.uploadedAt || attachment.uploaded_at;
 
                         return (
-                          <a
+                          <button
                             key={index}
-                            href={url}
-                            target="_blank"
-                            rel="noopener noreferrer"
-                            className="flex items-center gap-3 p-3 border border-[#011a60]/30 rounded-lg hover:border-[#011a60]/60 transition-all"
+                            type="button"
+                            onClick={() => handleViewDocument(url)}
+                            className="flex items-center gap-3 p-3 border border-[#011a60]/30 rounded-lg hover:border-[#011a60]/60 transition-all w-full text-left"
                           >
                             <FileText className="w-5 h-5 text-foreground" />
                             <div className="flex-1 min-w-0">
@@ -803,16 +1129,16 @@ const OfficerComplaintDetailPage: React.FC = () => {
                                     .join(" • ")}
                                   {uploadedAt
                                     ? ` • ${new Date(
-                                        uploadedAt
+                                        uploadedAt,
                                       ).toLocaleString()}`
                                     : ""}
                                 </p>
                               )}
                             </div>
                             <ExternalLink className="w-4 h-4 text-muted-foreground" />
-                          </a>
+                          </button>
                         );
-                      }
+                      },
                     )}
                   </div>
                 </div>
@@ -841,7 +1167,7 @@ const OfficerComplaintDetailPage: React.FC = () => {
                             दिनांक:{" "}
                             <span className="text-[#011a60]">
                               {new Date(
-                                (complaint as any).drafted_letter.date
+                                (complaint as any).drafted_letter.date,
                               ).toLocaleDateString("hi-IN", {
                                 year: "numeric",
                                 month: "long",
@@ -878,7 +1204,7 @@ const OfficerComplaintDetailPage: React.FC = () => {
                   {/* Attachments Section */}
                   {(complaint as any).drafted_letter.attachments &&
                   Array.isArray(
-                    (complaint as any).drafted_letter.attachments
+                    (complaint as any).drafted_letter.attachments,
                   ) &&
                   (complaint as any).drafted_letter.attachments.length > 0 ? (
                     <div className="space-y-3">
@@ -904,7 +1230,7 @@ const OfficerComplaintDetailPage: React.FC = () => {
                               </div>
                               <ExternalLink className="w-4 h-4 text-muted-foreground" />
                             </a>
-                          )
+                          ),
                         )}
                       </div>
                     </div>
@@ -946,7 +1272,7 @@ const OfficerComplaintDetailPage: React.FC = () => {
                             checked={noteType === "inward"}
                             onChange={(e) =>
                               setNoteType(
-                                e.target.value as "inward" | "outward"
+                                e.target.value as "inward" | "outward",
                               )
                             }
                             className="w-4 h-4 text-[#011a60]"
@@ -964,7 +1290,7 @@ const OfficerComplaintDetailPage: React.FC = () => {
                             checked={noteType === "outward"}
                             onChange={(e) =>
                               setNoteType(
-                                e.target.value as "inward" | "outward"
+                                e.target.value as "inward" | "outward",
                               )
                             }
                             className="w-4 h-4 text-[#011a60]"
@@ -1072,19 +1398,18 @@ const OfficerComplaintDetailPage: React.FC = () => {
                                   </p>
                                   <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
                                     {note.attachments.map((url, idx) => (
-                                      <a
+                                      <button
                                         key={idx}
-                                        href={url}
-                                        target="_blank"
-                                        rel="noopener noreferrer"
-                                        className="flex items-center gap-2 p-2 border border-[#011a60]/20 rounded hover:border-[#011a60]/40 transition-colors text-sm"
+                                        type="button"
+                                        onClick={() => handleViewDocument(url)}
+                                        className="flex items-center gap-2 p-2 border border-[#011a60]/20 rounded hover:border-[#011a60]/40 transition-colors text-sm w-full text-left"
                                       >
                                         <FileText className="w-4 h-4 text-foreground" />
                                         <span className="truncate">
                                           Attachment {idx + 1}
                                         </span>
                                         <ExternalLink className="w-3 h-3 text-muted-foreground ml-auto" />
-                                      </a>
+                                      </button>
                                     ))}
                                   </div>
                                 </div>
@@ -1120,7 +1445,7 @@ const OfficerComplaintDetailPage: React.FC = () => {
                             checked={documentType === "inward"}
                             onChange={(e) =>
                               setDocumentType(
-                                e.target.value as "inward" | "outward"
+                                e.target.value as "inward" | "outward",
                               )
                             }
                             className="w-4 h-4 text-[#011a60]"
@@ -1138,7 +1463,7 @@ const OfficerComplaintDetailPage: React.FC = () => {
                             checked={documentType === "outward"}
                             onChange={(e) =>
                               setDocumentType(
-                                e.target.value as "inward" | "outward"
+                                e.target.value as "inward" | "outward",
                               )
                             }
                             className="w-4 h-4 text-[#011a60]"
@@ -1212,7 +1537,7 @@ const OfficerComplaintDetailPage: React.FC = () => {
                             setSelectedFile(null);
                             setFilePreview(null);
                             const fileInput = document.getElementById(
-                              "file-upload-input"
+                              "file-upload-input",
                             ) as HTMLInputElement;
                             if (fileInput) fileInput.value = "";
                           }}
@@ -1304,37 +1629,54 @@ const OfficerComplaintDetailPage: React.FC = () => {
                                 )}
                               </Badge>
                               <div className="flex items-center gap-2">
-                                <a
-                                  href={doc.fileUrl}
-                                  target="_blank"
-                                  rel="noopener noreferrer"
-                                  className="p-1.5 hover:bg-[#011a60]/10 rounded transition-colors"
+                                <Button
+                                  variant="ghost"
+                                  size="icon"
+                                  className="h-8 w-8 p-0 hover:bg-[#011a60]/10"
                                   title="View"
+                                  onClick={() =>
+                                    handleViewDocument(doc.fileUrl)
+                                  }
                                 >
                                   <ExternalLink className="w-4 h-4 text-[#011a60]" />
-                                </a>
-                                <a
-                                  href={doc.fileUrl}
-                                  download
-                                  className="p-1.5 hover:bg-[#011a60]/10 rounded transition-colors"
+                                </Button>
+                                <Button
+                                  variant="ghost"
+                                  size="icon"
+                                  className="h-8 w-8 p-0 hover:bg-[#011a60]/10"
                                   title="Download"
+                                  onClick={async () => {
+                                    try {
+                                      const viewUrl =
+                                        await uploadService.getPresignedViewUrl(
+                                          doc.fileUrl,
+                                        );
+                                      const a = document.createElement("a");
+                                      a.href = viewUrl;
+                                      a.download = doc.fileName || "download";
+                                      a.target = "_blank";
+                                      a.rel = "noopener noreferrer";
+                                      a.click();
+                                    } catch (e: any) {
+                                      toast.error(
+                                        e.message || "Failed to download",
+                                      );
+                                    }
+                                  }}
                                 >
                                   <Download className="w-4 h-4 text-[#011a60]" />
-                                </a>
+                                </Button>
                               </div>
                             </div>
                             {isImageFile(doc.fileUrl) && (
-                              <div className="mt-3 rounded-lg overflow-hidden border border-[#011a60]/20">
-                                <img
-                                  src={doc.fileUrl}
-                                  alt={doc.fileName}
-                                  className="w-full h-32 object-cover"
-                                  onError={(e) => {
-                                    (
-                                      e.target as HTMLImageElement
-                                    ).style.display = "none";
-                                  }}
-                                />
+                              <div
+                                className="mt-3 rounded-lg overflow-hidden border border-[#011a60]/20 cursor-pointer flex items-center justify-center h-32 bg-[#011a60]/5"
+                                onClick={() => handleViewDocument(doc.fileUrl)}
+                                title="Click to view image"
+                              >
+                                <span className="text-xs text-muted-foreground">
+                                  Click to view image
+                                </span>
                               </div>
                             )}
                             <p className="text-xs text-muted-foreground mt-2">
@@ -1435,7 +1777,7 @@ const OfficerComplaintDetailPage: React.FC = () => {
                           .sort(
                             (a, b) =>
                               new Date(b.createdAt).getTime() -
-                              new Date(a.createdAt).getTime()
+                              new Date(a.createdAt).getTime(),
                           )
                           .map((request) => (
                             <div
@@ -1449,15 +1791,15 @@ const OfficerComplaintDetailPage: React.FC = () => {
                                       request.status === "pending"
                                         ? "bg-yellow-500 text-white"
                                         : request.status === "approved"
-                                        ? "bg-green-500 text-white"
-                                        : "bg-red-500 text-white"
+                                          ? "bg-green-500 text-white"
+                                          : "bg-red-500 text-white"
                                     }
                                   >
                                     {request.status === "pending"
                                       ? "Pending"
                                       : request.status === "approved"
-                                      ? "Approved"
-                                      : "Rejected"}
+                                        ? "Approved"
+                                        : "Rejected"}
                                   </Badge>
                                   <span className="text-sm text-muted-foreground">
                                     {request.daysRequested} day
@@ -1490,7 +1832,7 @@ const OfficerComplaintDetailPage: React.FC = () => {
                                         : "Rejected"}{" "}
                                       {request.decidedAt &&
                                         `on ${new Date(
-                                          request.decidedAt
+                                          request.decidedAt,
                                         ).toLocaleDateString()}`}
                                     </span>
                                     {request.notes && (

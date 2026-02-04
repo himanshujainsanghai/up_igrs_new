@@ -1,6 +1,8 @@
 import { Response, NextFunction } from "express";
 import { AuthRequest } from "../middleware/auth.middleware";
 import * as complaintsService from "../services/complaints.service";
+import * as complaintTimelineService from "../services/complaintTimeline.service";
+import type { ComplaintTimelineEventTypeValue } from "../models/ComplaintTimelineEvent";
 import { sendSuccess, sendPaginated, sendError } from "../utils/response";
 import {
   ValidationError,
@@ -66,6 +68,54 @@ export const getComplaintById = async (
     const { id } = req.params;
     const complaint = await complaintsService.getComplaintById(id);
     sendSuccess(res, complaint);
+  } catch (error) {
+    next(error);
+  }
+};
+
+/**
+ * GET /api/v1/complaints/:id/timeline
+ * Get complaint timeline (chronological events). Optional query: limit, skip, event_types.
+ */
+export const getComplaintTimeline = async (
+  req: AuthRequest,
+  res: Response,
+  next: NextFunction
+): Promise<void> => {
+  try {
+    const { id } = req.params;
+    const limit = req.query.limit ? parseInt(req.query.limit as string, 10) : undefined;
+    const skip = req.query.skip ? parseInt(req.query.skip as string, 10) : undefined;
+    const eventTypes = req.query.event_types;
+    const event_types = Array.isArray(eventTypes)
+      ? eventTypes as string[]
+      : typeof eventTypes === "string"
+        ? eventTypes.split(",").map((s) => s.trim())
+        : undefined;
+    const timeline = await complaintTimelineService.getTimelineByComplaintId(id, {
+      limit,
+      skip,
+      event_types: event_types?.length ? (event_types as ComplaintTimelineEventTypeValue[]) : undefined,
+    });
+    sendSuccess(res, timeline);
+  } catch (error) {
+    next(error);
+  }
+};
+
+/**
+ * GET /api/v1/complaints/:id/assignment-history
+ * Get assignment-related events only (assigned, reassigned, unassigned).
+ */
+export const getComplaintAssignmentHistory = async (
+  req: AuthRequest,
+  res: Response,
+  next: NextFunction
+): Promise<void> => {
+  try {
+    const { id } = req.params;
+    const history = await complaintTimelineService.getAssignmentHistory(id);
+    sendSuccess(res, history);
   } catch (error) {
     next(error);
   }
@@ -508,7 +558,7 @@ export const assignComplaintToOfficer = async (
 
 /**
  * PUT /api/v1/complaints/:id/unassign
- * Unassign complaint from officer (admin only)
+ * Unassign complaint from officer (admin only) – complaint id in URL
  */
 export const unassignComplaint = async (
   req: AuthRequest,
@@ -517,21 +567,74 @@ export const unassignComplaint = async (
 ): Promise<void> => {
   try {
     const { id } = req.params;
-
-    const complaint = await Complaint.findOne({ id });
-    if (!complaint) {
-      throw new NotFoundError("Complaint not found");
-    }
-
-    complaint.assigned_to_user_id = undefined;
-    if (complaint.status === "in_progress") {
-      complaint.status = "pending";
-    }
-    await complaint.save();
-
+    const complaint = await complaintsService.unassignComplaint(
+      id,
+      req.user?.id
+    );
     logger.info(`Complaint ${id} unassigned by admin ${req.user?.email}`);
-
     sendSuccess(res, complaint);
+  } catch (error) {
+    next(error);
+  }
+};
+
+/**
+ * PUT /api/v1/complaints/unassign
+ * Solo unassign route: disconnect officer from complaint (admin only).
+ * Body: { complaintId: string }. Updates timeline; removes complaint from officer's list.
+ */
+export const unassignComplaintSolo = async (
+  req: AuthRequest,
+  res: Response,
+  next: NextFunction
+): Promise<void> => {
+  try {
+    const { complaintId } = req.body;
+    if (!complaintId || typeof complaintId !== "string") {
+      throw new ValidationError(
+        "complaintId is required and must be a string"
+      );
+    }
+    const id = complaintId.trim();
+    if (!id) {
+      throw new ValidationError("complaintId cannot be empty");
+    }
+    const complaint = await complaintsService.unassignComplaint(id, req.user?.id);
+    logger.info(
+      `Complaint ${id} unassigned via /unassign by admin ${req.user?.email}`
+    );
+    sendSuccess(res, complaint);
+  } catch (error) {
+    next(error);
+  }
+};
+
+/**
+ * PUT /api/v1/complaints/:id/reassign-officer
+ * Reassign complaint to a different officer (admin only).
+ * Body: { officerId: string } (Mongo ObjectId of the new officer).
+ * Keeps Complaint.assignedOfficer and Officer.assignedComplaints in sync; appends timeline.
+ */
+export const reassignOfficer = async (
+  req: AuthRequest,
+  res: Response,
+  next: NextFunction
+): Promise<void> => {
+  try {
+    const { id } = req.params;
+    const { officerId } = req.body;
+    if (!officerId || typeof officerId !== "string") {
+      throw new ValidationError("officerId is required and must be a string");
+    }
+    const result = await complaintsService.reassignOfficer(
+      id,
+      officerId.trim(),
+      req.user?.id
+    );
+    logger.info(
+      `Complaint ${id} reassigned to officer ${officerId} by admin ${req.user?.email}`
+    );
+    sendSuccess(res, result);
   } catch (error) {
     next(error);
   }

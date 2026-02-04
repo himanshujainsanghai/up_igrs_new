@@ -25,7 +25,7 @@ export const notesUtils = {
     try {
       const note = await complaintsService.addNote(
         complaintId,
-        noteContent.trim()
+        noteContent.trim(),
       );
       toast.success("Note added successfully");
       return note;
@@ -57,7 +57,7 @@ export const documentsUtils = {
   async addDocument(
     complaintId: string,
     file: File,
-    documentType: "inward" | "outward"
+    documentType: "inward" | "outward",
   ): Promise<any> {
     // Validate file
     if (!file) {
@@ -70,10 +70,13 @@ export const documentsUtils = {
     }
 
     try {
-      // Step 1: Upload file to S3
+      // Step 1: Upload file (presigned S3 or fallback to backend)
       const fileUrl = await uploadService.uploadFile(file);
+      if (!fileUrl) {
+        throw new Error("Upload did not return a file URL");
+      }
 
-      // Step 2: Add document to complaint
+      // Step 2: Add document record to complaint
       const document = await complaintsService.addDocument(complaintId, {
         fileName: file.name,
         fileUrl: fileUrl,
@@ -84,7 +87,11 @@ export const documentsUtils = {
       toast.success("Document uploaded successfully");
       return document;
     } catch (error: any) {
-      toast.error(error.message || "Failed to upload document");
+      const message =
+        error?.response?.data?.error?.message ||
+        error?.message ||
+        "Failed to upload document";
+      toast.error(message);
       throw error;
     }
   },
@@ -114,7 +121,7 @@ export const researchUtils = {
    */
   async performResearch(
     complaintId: string,
-    depth: "basic" | "detailed" | "comprehensive" = "detailed"
+    depth: "basic" | "detailed" | "comprehensive" = "detailed",
   ): Promise<any> {
     try {
       const response = await aiService.researchRelatedIssues(complaintId);
@@ -179,7 +186,7 @@ export const draftLetterUtils = {
                 office_address: exec.contact?.address || "",
                 role: exec.role || "",
               });
-            }
+            },
           );
         }
 
@@ -200,7 +207,7 @@ export const draftLetterUtils = {
                 office_address: exec.contact?.address || "",
                 role: exec.role || "",
               });
-            }
+            },
           );
         }
       });
@@ -219,7 +226,7 @@ export const draftLetterUtils = {
    */
   async draftLetter(
     complaintId: string,
-    selectedExecutive?: any
+    selectedExecutive?: any,
   ): Promise<any> {
     try {
       // Transform executive to match expected officer format
@@ -243,7 +250,7 @@ export const draftLetterUtils = {
       // Pass selected executive directly to API
       const response = await aiService.draftComplaintLetter(
         complaintId,
-        officerFormat
+        officerFormat,
       );
       // Backend returns ComplaintLetterResponse and auto-saves
       const letterData = response?.letter || response;
@@ -261,7 +268,7 @@ export const draftLetterUtils = {
   async saveLetter(
     complaintId: string,
     letter: any,
-    editedBody: string
+    editedBody: string,
   ): Promise<any> {
     try {
       const updatedLetter = {
@@ -299,6 +306,63 @@ export const draftLetterUtils = {
       return complaint.drafted_letter;
     }
     return null;
+  },
+
+  /**
+   * Build letter "to" line from officer (template, no AI)
+   * Format: सेवा में,\n[Name]\n[Designation]\n[district/office]
+   */
+  buildLetterToFromOfficer(officer: {
+    name?: string;
+    designation?: string;
+    office_address?: string;
+    district?: string;
+  }): string {
+    const parts: string[] = ["सेवा में"];
+    if (officer.name) parts.push(officer.name.trim());
+    if (officer.designation) parts.push(officer.designation.trim());
+    const location = officer.office_address || officer.district || "";
+    if (location) parts.push(location.trim());
+    return parts.join("\n");
+  },
+
+  /**
+   * Update recipient only: selected_officer + drafted_letter.to (no AI redraft)
+   */
+  async updateRecipient(
+    complaintId: string,
+    letter: any,
+    officer: {
+      name?: string;
+      designation?: string;
+      email?: string;
+      phone?: string;
+      office_address?: string;
+      district?: string;
+    },
+  ): Promise<{ selected_officer: any; letter: any }> {
+    try {
+      const officerFormat = {
+        name: officer.name || "",
+        designation: officer.designation || "",
+        email: officer.email || "",
+        phone: officer.phone || "",
+        office_address: officer.office_address || "",
+      };
+      const newTo = draftLetterUtils.buildLetterToFromOfficer(officer);
+      const updatedLetter = { ...letter, to: newTo };
+
+      await complaintsService.updateComplaintStage1Data(complaintId, {
+        selected_officer: officerFormat,
+        drafted_letter: updatedLetter,
+      });
+
+      toast.success("Recipient updated successfully");
+      return { selected_officer: officerFormat, letter: updatedLetter };
+    } catch (error: any) {
+      toast.error(error.message || "Failed to update recipient");
+      throw error;
+    }
   },
 };
 
@@ -347,7 +411,7 @@ export const actionsUtils = {
     try {
       const result = await complaintsService.sendComplaintEmail(
         complaintId,
-        recipientEmail
+        recipientEmail,
       );
       toast.success("Email sent successfully");
       return result;

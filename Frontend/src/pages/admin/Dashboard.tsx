@@ -8,8 +8,8 @@ import React from "react";
 import ComplaintsHeatMapPage from "./ComplaintsHeatMapPage";
 
 const Dashboard: React.FC = () => {
-  // Dashboard now shows the full UP heat map with all districts
-  return <ComplaintsHeatMapPage />;
+  // Dashboard shows the full UP heat map inside AdminLayout; embedded keeps navbar/sidebar visible
+  return <ComplaintsHeatMapPage embedded />;
 };
 
 export default Dashboard;

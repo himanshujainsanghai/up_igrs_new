@@ -88,9 +88,11 @@ import {
   AccordionTrigger,
 } from "@/components/ui/accordion";
 import { complaintsService } from "@/services/complaints.service";
+import { uploadService } from "@/services/upload.service";
 import { Complaint, ComplaintNote, ComplaintDocument } from "@/types";
 import { toast } from "sonner";
 import ComplaintTimeline from "@/components/complaints/ComplaintTimeline";
+import DocumentSummaryPanel from "@/components/complaints/DocumentSummaryPanel";
 import {
   notesUtils,
   documentsUtils,
@@ -106,6 +108,119 @@ import {
   selectExecutivesLoading,
   selectExecutivesError,
 } from "@/store/slices/executives.slice";
+
+/** Whether the URL points to an image (by path or extension). */
+function isImageUrl(url: string): boolean {
+  if (!url) return false;
+  if (url.includes("/images/")) return true;
+  return /\.(jpg|jpeg|png|gif|webp)(\?|$)/i.test(url);
+}
+
+/**
+ * Renders one user-submitted doc from complaint.images using presigned URL.
+ * Shows image thumbnail or document card (PDF, etc.) with View.
+ */
+function UserSubmittedDocCard({
+  s3Url,
+  index,
+  onViewDocument,
+}: {
+  s3Url: string;
+  index: number;
+  onViewDocument: (url: string) => void;
+}) {
+  const [presignedUrl, setPresignedUrl] = useState<string | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(false);
+  const isImage = isImageUrl(s3Url);
+
+  useEffect(() => {
+    let cancelled = false;
+    uploadService
+      .getPresignedViewUrl(s3Url)
+      .then((url) => {
+        if (!cancelled) {
+          setPresignedUrl(url);
+          setError(false);
+        }
+      })
+      .catch(() => {
+        if (!cancelled) setError(true);
+      })
+      .finally(() => {
+        if (!cancelled) setLoading(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [s3Url]);
+
+  if (loading) {
+    return (
+      <div className="aspect-square border border-[#011a60]/20 rounded-lg overflow-hidden bg-muted/50 flex items-center justify-center">
+        <Loader2 className="w-8 h-8 animate-spin text-muted-foreground" />
+      </div>
+    );
+  }
+
+  if (error) {
+    return (
+      <div className="aspect-square border border-destructive/30 rounded-lg overflow-hidden bg-destructive/5 flex flex-col items-center justify-center p-2">
+        <AlertCircle className="w-8 h-8 text-destructive mb-1" />
+        <p className="text-xs text-destructive text-center">Failed to load</p>
+        <Button
+          variant="ghost"
+          size="sm"
+          className="mt-1 h-7 text-xs"
+          onClick={() => onViewDocument(s3Url)}
+        >
+          Open link
+        </Button>
+      </div>
+    );
+  }
+
+  if (isImage && presignedUrl) {
+    return (
+      <a
+        href={presignedUrl}
+        target="_blank"
+        rel="noopener noreferrer"
+        className="group relative aspect-square border border-[#011a60]/30 rounded-lg overflow-hidden hover:border-[#011a60]/60 transition-all block"
+      >
+        <img
+          src={presignedUrl}
+          alt={`Document ${index + 1}`}
+          className="w-full h-full object-cover"
+        />
+        <div className="absolute inset-0 bg-black/0 group-hover:bg-black/10 transition-colors flex items-center justify-center">
+          <ImageIcon className="w-6 h-6 text-white opacity-0 group-hover:opacity-100 transition-opacity" />
+        </div>
+      </a>
+    );
+  }
+
+  return (
+    <div className="aspect-square border border-[#011a60]/30 rounded-lg overflow-hidden flex flex-col bg-gradient-to-br from-white to-orange-50/30 p-3">
+      <div className="p-2 rounded-lg bg-gray-100 flex-1 flex items-center justify-center min-h-0">
+        <FileText className="w-10 h-10 text-muted-foreground" />
+      </div>
+      <p className="text-xs font-medium text-foreground truncate mt-2 text-center">
+        Document {index + 1}
+      </p>
+      <Button
+        variant="outline"
+        size="sm"
+        className="mt-1 w-full h-8 text-xs"
+        onClick={() => presignedUrl && window.open(presignedUrl, "_blank")}
+        disabled={!presignedUrl}
+      >
+        <ExternalLink className="w-3 h-3 mr-1" />
+        View
+      </Button>
+    </div>
+  );
+}
 
 const ComplaintDetailPage: React.FC = () => {
   const { id } = useParams<{ id: string }>();
@@ -144,6 +259,8 @@ const ComplaintDetailPage: React.FC = () => {
   const [editableLetterBody, setEditableLetterBody] = useState("");
   const [stage1Loading, setStage1Loading] = useState(false);
   const [stage2Loading, setStage2Loading] = useState(false);
+  const [showChangeOfficerUI, setShowChangeOfficerUI] = useState(false);
+  const [updatingRecipient, setUpdatingRecipient] = useState(false);
   const officersScrollRef = React.useRef<HTMLDivElement>(null);
   const [canScrollLeft, setCanScrollLeft] = useState(false);
   const [canScrollRight, setCanScrollRight] = useState(true);
@@ -181,6 +298,11 @@ const ComplaintDetailPage: React.FC = () => {
   const [loadingAssignmentExecutives, setLoadingAssignmentExecutives] =
     useState(false);
   const [assigningOfficer, setAssigningOfficer] = useState(false);
+  const [unassigning, setUnassigning] = useState(false);
+  const [changingOfficer, setChangingOfficer] = useState(false);
+  const [showUnassignModal, setShowUnassignModal] = useState(false);
+  const [showChangeOfficerModal, setShowChangeOfficerModal] = useState(false);
+  const [showChangeOfficerSelect, setShowChangeOfficerSelect] = useState(false);
   const [assignmentResult, setAssignmentResult] = useState<{
     isNewOfficer: boolean;
     user?: {
@@ -212,6 +334,18 @@ const ComplaintDetailPage: React.FC = () => {
       setAssignmentExecutives(flattenedExecutives);
     }
   }, [flattenedExecutives]);
+
+  // Sync selectedExecutiveIndex to match complaint.selected_officer when executives load (e.g. after "Change officer" loads list)
+  useEffect(() => {
+    const so = (complaint as any)?.selected_officer;
+    if (!so || !executives.length) return;
+    const idx = executives.findIndex(
+      (e: any) =>
+        (e.email && e.email === so.email) ||
+        (e.name && so.name && e.name.trim() === so.name.trim())
+    );
+    if (idx >= 0) setSelectedExecutiveIndex(idx);
+  }, [complaint, executives]);
 
   // Note: Assignment executives are no longer loaded - we use selected_officer directly
 
@@ -343,6 +477,16 @@ const ComplaintDetailPage: React.FC = () => {
     }
   };
 
+  const handleViewDocument = async (fileUrl: string) => {
+    if (!fileUrl) return;
+    try {
+      const viewUrl = await uploadService.getPresignedViewUrl(fileUrl);
+      window.open(viewUrl, "_blank", "noopener,noreferrer");
+    } catch (error: any) {
+      toast.error(error.message || "Failed to open document");
+    }
+  };
+
   const handleResearch = async () => {
     if (!id) return;
     try {
@@ -400,10 +544,16 @@ const ComplaintDetailPage: React.FC = () => {
   };
 
   const checkScrollButtons = useCallback(() => {
-    if (!officersScrollRef.current) return;
-    const { scrollLeft, scrollWidth, clientWidth } = officersScrollRef.current;
+    const el = officersScrollRef.current;
+    if (!el) return;
+    const { scrollLeft, scrollWidth, clientWidth } = el;
+    const maxScroll = Math.max(0, scrollWidth - clientWidth);
+    // Clamp scroll so we never show white space to the right (e.g. after focus/scrollIntoView on a later card)
+    if (scrollLeft > maxScroll) {
+      el.scrollLeft = maxScroll;
+    }
     setCanScrollLeft(scrollLeft > 0);
-    setCanScrollRight(scrollLeft < scrollWidth - clientWidth - 10);
+    setCanScrollRight(scrollLeft < maxScroll - 10);
   }, []);
 
   const scrollOfficers = useCallback((direction: "left" | "right") => {
@@ -429,6 +579,28 @@ const ComplaintDetailPage: React.FC = () => {
       return () => clearTimeout(timer);
     }
   }, [executives, checkScrollButtons]);
+
+  // When selection changes, clamp scroll after paint and after any focus/scrollIntoView (fixes white space when selecting later cards)
+  useEffect(() => {
+    const el = officersScrollRef.current;
+    if (!el || executives.length === 0) return;
+    const clampScroll = () => {
+      const maxScroll = Math.max(0, el.scrollWidth - el.clientWidth);
+      if (el.scrollLeft > maxScroll) {
+        el.scrollLeft = maxScroll;
+        checkScrollButtons();
+      }
+    };
+    let timeoutId: ReturnType<typeof setTimeout> | null = null;
+    const frameId = requestAnimationFrame(() => {
+      clampScroll();
+      timeoutId = setTimeout(clampScroll, 0);
+    });
+    return () => {
+      cancelAnimationFrame(frameId);
+      if (timeoutId !== null) clearTimeout(timeoutId);
+    };
+  }, [selectedExecutiveIndex, executives.length, checkScrollButtons]);
 
   const checkAssignmentScrollButtons = useCallback(() => {
     if (!assignmentOfficersScrollRef.current) return;
@@ -483,6 +655,20 @@ const ComplaintDetailPage: React.FC = () => {
         (letterData?.letter ? letterData.letter.body : "") ||
         "";
       setEditableLetterBody(letterBody);
+      // Optimistic update: sync selected_officer into complaint state so Action tab
+      // shows the officer without requiring a full page refresh or refetch
+      if (selectedExecutive && complaint) {
+        const officerFormat = {
+          name: selectedExecutive.name || "",
+          designation: selectedExecutive.designation || "",
+          email: selectedExecutive.email || "",
+          phone: selectedExecutive.phone || "",
+          office_address: selectedExecutive.office_address || "",
+        };
+        setComplaint((prev) =>
+          prev ? ({ ...prev, selected_officer: officerFormat } as any) : prev
+        );
+      }
     } catch (error: any) {
       // Error already handled in utility function
     } finally {
@@ -501,6 +687,26 @@ const ComplaintDetailPage: React.FC = () => {
       setLetter(updatedLetter);
     } catch (error: any) {
       // Error already handled in utility function
+    }
+  };
+
+  const handleUpdateRecipient = async () => {
+    if (!id || !letter || executives.length === 0) return;
+    const selectedExecutive = executives[selectedExecutiveIndex];
+    if (!selectedExecutive) return;
+    try {
+      setUpdatingRecipient(true);
+      const { selected_officer: newOfficer, letter: updatedLetter } =
+        await draftLetterUtils.updateRecipient(id, letter, selectedExecutive);
+      setLetter(updatedLetter);
+      setComplaint((prev) =>
+        prev ? ({ ...prev, selected_officer: newOfficer } as any) : prev
+      );
+      setShowChangeOfficerUI(false);
+    } catch (error: any) {
+      // Error already handled in utility
+    } finally {
+      setUpdatingRecipient(false);
     }
   };
 
@@ -652,6 +858,80 @@ const ComplaintDetailPage: React.FC = () => {
       toast.error(error.message || "Failed to load executives");
     } finally {
       setLoadingAssignmentExecutives(false);
+    }
+  };
+
+  const handleUnassignConfirm = async () => {
+    if (!id) return;
+    try {
+      setUnassigning(true);
+      setShowUnassignModal(false);
+      await complaintsService.unassignComplaint(id);
+      await loadComplaint();
+      toast.success("Officer unassigned. Complaint is now pending.");
+    } catch (error: any) {
+      toast.error(error?.message || "Failed to unassign");
+    } finally {
+      setUnassigning(false);
+    }
+  };
+
+  const handleChangeOfficerContinue = () => {
+    setShowChangeOfficerModal(false);
+    setShowChangeOfficerSelect(true);
+    loadAssignmentExecutives();
+  };
+
+  const handleChangeOfficerConfirm = async () => {
+    if (!id) return;
+    const selectedExecutive =
+      assignmentExecutives[selectedAssignmentExecutiveIndex];
+    if (!selectedExecutive) {
+      toast.error("Please select an officer.");
+      return;
+    }
+    const letter = (complaint as any)?.drafted_letter;
+    if (!letter) {
+      toast.error("Drafted letter not found.");
+      return;
+    }
+    try {
+      setChangingOfficer(true);
+      await draftLetterUtils.updateRecipient(id, letter, selectedExecutive);
+      const executiveForAPI = {
+        name: selectedExecutive.name || "",
+        designation: selectedExecutive.designation || "",
+        email: selectedExecutive.email || "",
+        phone: selectedExecutive.phone || "",
+        office_address:
+          selectedExecutive.office_address ||
+          selectedExecutive.officeAddress ||
+          "",
+        district:
+          complaint?.districtName ||
+          (complaint as any)?.district_name ||
+          "Unknown",
+        category: "general_administration" as const,
+      };
+      const result = await complaintsService.assignOfficerAndSendEmail(
+        id,
+        executiveForAPI
+      );
+      if (result?.assignment?.complaint) {
+        setAssignmentResult(result.assignment);
+        await loadComplaint();
+        await loadEmailHistory();
+        setShowChangeOfficerSelect(false);
+        toast.success(
+          "Assigned officer changed and email sent to new officer."
+        );
+      } else {
+        toast.error("Invalid response from server");
+      }
+    } catch (error: any) {
+      toast.error(error?.message || "Failed to change assigned officer");
+    } finally {
+      setChangingOfficer(false);
     }
   };
 
@@ -1370,33 +1650,24 @@ const ComplaintDetailPage: React.FC = () => {
                 )}
               </div>
 
-              {/* Images */}
+              {/* User-submitted docs (images array: images + PDFs/documents) — shown via presigned URLs */}
               {(complaint as any).images &&
                 Array.isArray((complaint as any).images) &&
                 (complaint as any).images.length > 0 && (
                   <div className="space-y-3">
                     <h3 className="text-sm font-semibold text-foreground uppercase tracking-wide border-b pb-2">
-                      Images ({(complaint as any).images.length})
+                      User-submitted documents (
+                      {(complaint as any).images.length})
                     </h3>
                     <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
                       {(complaint as any).images.map(
-                        (imageUrl: string, index: number) => (
-                          <a
-                            key={index}
-                            href={imageUrl}
-                            target="_blank"
-                            rel="noopener noreferrer"
-                            className="group relative aspect-square border border-[#011a60]/30 rounded-lg overflow-hidden hover:border-[#011a60]/60 transition-all"
-                          >
-                            <img
-                              src={imageUrl}
-                              alt={`Image ${index + 1}`}
-                              className="w-full h-full object-cover"
-                            />
-                            <div className="absolute inset-0 bg-black/0 group-hover:bg-black/10 transition-colors flex items-center justify-center">
-                              <ImageIcon className="w-6 h-6 text-white opacity-0 group-hover:opacity-100 transition-opacity" />
-                            </div>
-                          </a>
+                        (s3Url: string, index: number) => (
+                          <UserSubmittedDocCard
+                            key={`${s3Url}-${index}`}
+                            s3Url={s3Url}
+                            index={index}
+                            onViewDocument={handleViewDocument}
+                          />
                         )
                       )}
                     </div>
@@ -1411,12 +1682,11 @@ const ComplaintDetailPage: React.FC = () => {
                   </h3>
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
                     {complaint.documents.map((doc, index) => (
-                      <a
+                      <button
                         key={index}
-                        href={doc.fileUrl}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className="flex items-center gap-3 p-3 border border-[#011a60]/30 rounded-lg hover:border-[#011a60]/60 transition-all"
+                        type="button"
+                        onClick={() => handleViewDocument(doc.fileUrl)}
+                        className="flex items-center gap-3 p-3 border border-[#011a60]/30 rounded-lg hover:border-[#011a60]/60 transition-all w-full text-left"
                       >
                         <FileText className="w-5 h-5 text-foreground" />
                         <div className="flex-1 min-w-0">
@@ -1430,7 +1700,7 @@ const ComplaintDetailPage: React.FC = () => {
                           )}
                         </div>
                         <ExternalLink className="w-4 h-4 text-muted-foreground" />
-                      </a>
+                      </button>
                     ))}
                   </div>
                 </div>
@@ -1448,12 +1718,11 @@ const ComplaintDetailPage: React.FC = () => {
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
                       {(complaint as any).officerAttachments.map(
                         (attachmentUrl: string, index: number) => (
-                          <a
+                          <button
                             key={index}
-                            href={attachmentUrl}
-                            target="_blank"
-                            rel="noopener noreferrer"
-                            className="flex items-center gap-3 p-3 border border-[#011a60]/30 rounded-lg hover:border-[#011a60]/60 transition-all"
+                            type="button"
+                            onClick={() => handleViewDocument(attachmentUrl)}
+                            className="flex items-center gap-3 p-3 border border-[#011a60]/30 rounded-lg hover:border-[#011a60]/60 transition-all w-full text-left"
                           >
                             <FileText className="w-5 h-5 text-foreground" />
                             <div className="flex-1 min-w-0">
@@ -1462,7 +1731,7 @@ const ComplaintDetailPage: React.FC = () => {
                               </p>
                             </div>
                             <ExternalLink className="w-4 h-4 text-muted-foreground" />
-                          </a>
+                          </button>
                         )
                       )}
                     </div>
@@ -1470,6 +1739,9 @@ const ComplaintDetailPage: React.FC = () => {
                 )}
             </CardContent>
           </Card>
+
+          {/* Document summaries (AI) */}
+          {complaint?.id && <DocumentSummaryPanel complaintId={complaint.id} />}
         </TabsContent>
 
         {/* Notes & Documents Tab */}
@@ -1611,15 +1883,20 @@ const ComplaintDetailPage: React.FC = () => {
             </CardContent>
           </Card>
 
-          {/* Upload Document Section - Modern Design */}
+          {/* Upload Document or Image Section - Modern Design */}
           <Card className="border-orange-200 shadow-md">
             <CardHeader className="bg-gradient-to-r from-orange-50 to-amber-50 border-b border-orange-200">
               <div className="flex items-center gap-2">
                 <div className="p-2 bg-primary/10 rounded-lg">
                   <FileUp className="w-5 h-5 text-primary" />
                 </div>
-                <CardTitle className="text-xl">Upload Document</CardTitle>
+                <CardTitle className="text-xl">
+                  Upload Document or Image
+                </CardTitle>
               </div>
+              <CardDescription className="text-muted-foreground mt-1">
+                PDF, Word, Excel, images (JPEG, PNG, GIF, WebP) supported
+              </CardDescription>
             </CardHeader>
             <CardContent className="p-6 space-y-4">
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -1657,7 +1934,7 @@ const ComplaintDetailPage: React.FC = () => {
                       onChange={(e) =>
                         setNewDocumentFile(e.target.files?.[0] || null)
                       }
-                      accept=".pdf,.doc,.docx,.jpg,.jpeg,.png,.gif"
+                      accept=".pdf,.doc,.docx,.xls,.xlsx,.txt,.jpg,.jpeg,.png,.gif,.webp,image/*"
                       className="h-11 cursor-pointer"
                     />
                   </div>
@@ -1690,12 +1967,12 @@ const ComplaintDetailPage: React.FC = () => {
                 {isUploadingDoc ? (
                   <>
                     <Loader2 className="w-4 h-4 mr-2 animate-spin" />
-                    Uploading Document...
+                    Uploading...
                   </>
                 ) : (
                   <>
                     <Upload className="w-4 h-4 mr-2" />
-                    Upload Document
+                    Upload Document or Image
                   </>
                 )}
               </Button>
@@ -1755,12 +2032,7 @@ const ComplaintDetailPage: React.FC = () => {
                             )}
                           </div>
                           <div className="flex-1 min-w-0">
-                            <a
-                              href={doc.fileUrl}
-                              target="_blank"
-                              rel="noopener noreferrer"
-                              className="block hover:text-primary transition-colors"
-                            >
+                            <div className="block hover:text-primary transition-colors">
                               <p className="text-sm font-semibold truncate mb-1">
                                 {doc.fileName}
                               </p>
@@ -1770,7 +2042,7 @@ const ComplaintDetailPage: React.FC = () => {
                                   {new Date(doc.createdAt).toLocaleString()}
                                 </p>
                               )}
-                            </a>
+                            </div>
                             <div className="flex items-center gap-2 mt-2">
                               <Badge
                                 variant="outline"
@@ -1785,9 +2057,7 @@ const ComplaintDetailPage: React.FC = () => {
                               <Button
                                 variant="ghost"
                                 size="sm"
-                                onClick={() =>
-                                  window.open(doc.fileUrl, "_blank")
-                                }
+                                onClick={() => handleViewDocument(doc.fileUrl)}
                                 className="h-7 px-2 text-xs"
                               >
                                 <ExternalLink className="w-3 h-3 mr-1" />
@@ -1809,7 +2079,7 @@ const ComplaintDetailPage: React.FC = () => {
                     No documents yet
                   </p>
                   <p className="text-xs text-muted-foreground">
-                    Upload documents to track related files
+                    Upload documents or images to track related files
                   </p>
                 </div>
               )}
@@ -2353,6 +2623,139 @@ const ComplaintDetailPage: React.FC = () => {
                     </p>
                   </div>
                 </div>
+              ) : letter &&
+                (complaint as any)?.selected_officer &&
+                !showChangeOfficerUI ? (
+                <div className="space-y-4">
+                  <p className="text-sm text-muted-foreground">
+                    Letter recipient is set. To assign or reassign this
+                    complaint, use the same officer on the Actions tab or change
+                    the recipient below.
+                  </p>
+                  <div className="flex items-center gap-3 p-4 bg-muted/50 rounded-lg border">
+                    <UserCheck className="w-5 h-5 text-primary flex-shrink-0" />
+                    <div>
+                      <p className="font-semibold text-foreground">
+                        {(complaint as any).selected_officer.name || "Unknown"}
+                      </p>
+                      <p className="text-sm text-muted-foreground">
+                        {(complaint as any).selected_officer.designation}
+                      </p>
+                    </div>
+                    <Button
+                      variant="outline"
+                      onClick={() => setShowChangeOfficerUI(true)}
+                      className="ml-auto"
+                    >
+                      Change officer
+                    </Button>
+                  </div>
+                </div>
+              ) : letter &&
+                (complaint as any)?.selected_officer &&
+                showChangeOfficerUI ? (
+                <div className="space-y-6">
+                  <p className="text-sm text-muted-foreground">
+                    Select a new recipient. Letter &quot;To&quot; will be
+                    updated; letter body is unchanged.
+                  </p>
+                  {executives.length === 0 ? (
+                    <div className="flex flex-col items-center gap-4 py-8">
+                      <p className="text-sm text-muted-foreground">
+                        Load officers to choose from
+                      </p>
+                      <Button
+                        onClick={handleFindOfficers}
+                        disabled={stage1Loading}
+                        size="lg"
+                        className="bg-primary hover:bg-primary/90"
+                      >
+                        {stage1Loading ? (
+                          <>
+                            <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                            Loading...
+                          </>
+                        ) : (
+                          <>
+                            <Users className="w-4 h-4 mr-2" />
+                            Load officers
+                          </>
+                        )}
+                      </Button>
+                    </div>
+                  ) : (
+                    <>
+                      <Label className="font-semibold text-foreground mb-2 block">
+                        Select new recipient ({executives.length} available):
+                      </Label>
+                      <div className="relative w-full min-w-0 overflow-x-auto scrollbar-hide pb-4">
+                        <RadioGroup
+                          value={selectedExecutiveIndex.toString()}
+                          onValueChange={(v) =>
+                            setSelectedExecutiveIndex(parseInt(v))
+                          }
+                          className="inline-block min-w-0"
+                          aria-label="Select new recipient"
+                        >
+                          <div className="flex gap-4 w-max">
+                            {executives.map((exec: any, index: number) => (
+                              <div
+                                key={index}
+                                className="w-[320px] flex-shrink-0"
+                              >
+                                <RadioGroupItem
+                                  value={index.toString()}
+                                  id={`change-exec-${index}`}
+                                  className="peer sr-only"
+                                  aria-hidden
+                                />
+                                <Label
+                                  htmlFor={`change-exec-${index}`}
+                                  className="flex flex-col p-4 border-2 rounded-xl cursor-pointer hover:bg-muted/50 transition-all peer-data-[state=checked]:border-primary peer-data-[state=checked]:ring-2 peer-data-[state=checked]:ring-primary/20 h-full"
+                                >
+                                  <div className="font-semibold text-foreground">
+                                    {exec.name || "Unknown"}
+                                  </div>
+                                  <div className="text-sm text-muted-foreground">
+                                    {exec.designation}
+                                    {exec.district ? ` - ${exec.district}` : ""}
+                                  </div>
+                                  {exec.email && (
+                                    <div className="text-xs text-muted-foreground mt-1 truncate">
+                                      {exec.email}
+                                    </div>
+                                  )}
+                                </Label>
+                              </div>
+                            ))}
+                          </div>
+                        </RadioGroup>
+                      </div>
+                      <div className="flex gap-2">
+                        <Button
+                          onClick={handleUpdateRecipient}
+                          disabled={updatingRecipient}
+                          className="bg-primary hover:bg-primary/90"
+                        >
+                          {updatingRecipient ? (
+                            <>
+                              <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                              Updating...
+                            </>
+                          ) : (
+                            "Update recipient"
+                          )}
+                        </Button>
+                        <Button
+                          variant="outline"
+                          onClick={() => setShowChangeOfficerUI(false)}
+                        >
+                          Cancel
+                        </Button>
+                      </div>
+                    </>
+                  )}
+                </div>
               ) : executives.length > 0 ? (
                 <div className="space-y-6">
                   <div>
@@ -2360,9 +2763,9 @@ const ComplaintDetailPage: React.FC = () => {
                       Select Executive to Address ({executives.length}{" "}
                       available):
                     </Label>
-                    <div className="relative w-full overflow-hidden">
+                    <div className="relative w-full overflow-y-hidden">
                       {/* Left Scroll Button */}
-                      {canScrollLeft && (
+                      {/* {canScrollLeft && (
                         <Button
                           variant="outline"
                           size="icon"
@@ -2371,9 +2774,9 @@ const ComplaintDetailPage: React.FC = () => {
                         >
                           <ChevronLeft className="w-5 h-5" />
                         </Button>
-                      )}
+                      )} */}
                       {/* Right Scroll Button */}
-                      {canScrollRight && (
+                      {/* {canScrollRight && (
                         <Button
                           variant="outline"
                           size="icon"
@@ -2382,12 +2785,12 @@ const ComplaintDetailPage: React.FC = () => {
                         >
                           <ChevronRight className="w-5 h-5" />
                         </Button>
-                      )}
-                      {/* Scrollable Container */}
+                      )} */}
+                      {/* Scrollable Container: parent = available width (w-full min-w-0), cards row inside so cards move within this width via scroll */}
                       <div
                         ref={officersScrollRef}
                         onScroll={checkScrollButtons}
-                        className="overflow-x-auto scrollbar-hide pb-4 px-12"
+                        className="w-full min-w-0 scrollbar-hide pb-4 px-12"
                         style={{ scrollBehavior: "smooth" }}
                       >
                         <RadioGroup
@@ -2395,62 +2798,67 @@ const ComplaintDetailPage: React.FC = () => {
                           onValueChange={(value) =>
                             setSelectedExecutiveIndex(parseInt(value))
                           }
-                          className="flex gap-4"
+                          className="inline-block min-w-0"
+                          aria-label="Select executive to address"
                         >
-                          {executives.map((exec, index) => (
-                            <div
-                              key={index}
-                              className="w-[320px] flex-shrink-0"
-                            >
-                              <RadioGroupItem
-                                value={index.toString()}
-                                id={`executive-${index}`}
-                                className="peer sr-only"
-                              />
-                              <Label
-                                htmlFor={`executive-${index}`}
-                                className="flex flex-col p-4 border-2 rounded-xl cursor-pointer hover:bg-gradient-to-br hover:from-blue-50 hover:to-indigo-50 transition-all peer-data-[state=checked]:border-primary peer-data-[state=checked]:ring-4 peer-data-[state=checked]:ring-primary/20 peer-data-[state=checked]:bg-gradient-to-br peer-data-[state=checked]:from-primary/5 peer-data-[state=checked]:to-orange-50 h-full"
+                          {/* Inner wrapper: guarantees horizontal row; RadioGroup root has grid, so row layout lives here to avoid layout collapse on selection */}
+                          <div className="flex gap-4 w-max">
+                            {executives.map((exec, index) => (
+                              <div
+                                key={index}
+                                className="w-[320px] flex-shrink-0"
                               >
-                                <div className="flex items-start gap-3">
-                                  <div className="w-10 h-10 rounded-full bg-gradient-to-br from-blue-500 to-indigo-600 flex items-center justify-center text-white font-bold text-sm flex-shrink-0">
-                                    {index + 1}
+                                <RadioGroupItem
+                                  value={index.toString()}
+                                  id={`executive-${index}`}
+                                  className="peer sr-only"
+                                  aria-hidden
+                                />
+                                <Label
+                                  htmlFor={`executive-${index}`}
+                                  className="flex flex-col p-4 border-2 rounded-xl cursor-pointer hover:bg-gradient-to-br hover:from-blue-50 hover:to-indigo-50 transition-all peer-data-[state=checked]:border-primary peer-data-[state=checked]:ring-4 peer-data-[state=checked]:ring-primary/20 peer-data-[state=checked]:bg-gradient-to-br peer-data-[state=checked]:from-primary/5 peer-data-[state=checked]:to-orange-50 h-full"
+                                >
+                                  <div className="flex items-start gap-3">
+                                    <div className="w-10 h-10 rounded-full bg-gradient-to-br from-blue-500 to-indigo-600 flex items-center justify-center text-white font-bold text-sm flex-shrink-0">
+                                      {index + 1}
+                                    </div>
+                                    <div className="flex-1 min-w-0">
+                                      <div className="font-bold text-base text-foreground mb-1">
+                                        {exec.name || "Unknown"}
+                                      </div>
+                                      <div className="text-sm font-medium text-muted-foreground mb-2">
+                                        {exec.designation} - {exec.district}
+                                      </div>
+                                      <div className="space-y-1.5 text-sm">
+                                        {exec.email && (
+                                          <div className="flex items-center gap-2 text-muted-foreground">
+                                            <Mail className="w-3.5 h-3.5 text-primary flex-shrink-0" />
+                                            <span className="truncate">
+                                              {exec.email}
+                                            </span>
+                                          </div>
+                                        )}
+                                        {exec.phone && (
+                                          <div className="flex items-center gap-2 text-muted-foreground">
+                                            <Phone className="w-3.5 h-3.5 text-primary flex-shrink-0" />
+                                            <span>{exec.phone}</span>
+                                          </div>
+                                        )}
+                                        {exec.office_address && (
+                                          <div className="flex items-start gap-2 text-muted-foreground">
+                                            <MapPin className="w-3.5 h-3.5 text-primary mt-0.5 flex-shrink-0" />
+                                            <span className="text-xs">
+                                              {exec.office_address}
+                                            </span>
+                                          </div>
+                                        )}
+                                      </div>
+                                    </div>
                                   </div>
-                                  <div className="flex-1 min-w-0">
-                                    <div className="font-bold text-base text-foreground mb-1">
-                                      {exec.name || "Unknown"}
-                                    </div>
-                                    <div className="text-sm font-medium text-muted-foreground mb-2">
-                                      {exec.designation} - {exec.district}
-                                    </div>
-                                    <div className="space-y-1.5 text-sm">
-                                      {exec.email && (
-                                        <div className="flex items-center gap-2 text-muted-foreground">
-                                          <Mail className="w-3.5 h-3.5 text-primary flex-shrink-0" />
-                                          <span className="truncate">
-                                            {exec.email}
-                                          </span>
-                                        </div>
-                                      )}
-                                      {exec.phone && (
-                                        <div className="flex items-center gap-2 text-muted-foreground">
-                                          <Phone className="w-3.5 h-3.5 text-primary flex-shrink-0" />
-                                          <span>{exec.phone}</span>
-                                        </div>
-                                      )}
-                                      {exec.office_address && (
-                                        <div className="flex items-start gap-2 text-muted-foreground">
-                                          <MapPin className="w-3.5 h-3.5 text-primary mt-0.5 flex-shrink-0" />
-                                          <span className="text-xs">
-                                            {exec.office_address}
-                                          </span>
-                                        </div>
-                                      )}
-                                    </div>
-                                  </div>
-                                </div>
-                              </Label>
-                            </div>
-                          ))}
+                                </Label>
+                              </div>
+                            ))}
+                          </div>
                         </RadioGroup>
                       </div>
                     </div>
@@ -2878,7 +3286,94 @@ const ComplaintDetailPage: React.FC = () => {
                   </div>
                 </CardHeader>
                 <CardContent className="p-6">
-                  {complaint?.isOfficerAssigned && !assignmentResult ? (
+                  {showChangeOfficerSelect ? (
+                    /* Change officer: select new officer (reuse assignment executives list) */
+                    <div className="space-y-6">
+                      <p className="text-sm text-muted-foreground">
+                        Select the new officer to assign this complaint to.
+                        Letter recipient and assignment will be updated.
+                      </p>
+                      {loadingAssignmentExecutives ? (
+                        <div className="flex items-center justify-center py-8">
+                          <Loader2 className="w-8 h-8 animate-spin text-primary" />
+                        </div>
+                      ) : assignmentExecutives.length === 0 ? (
+                        <p className="text-sm text-muted-foreground text-center py-4">
+                          No officers found. Try loading executives again.
+                        </p>
+                      ) : (
+                        <>
+                          <div
+                            className="w-full min-w-0 overflow-x-auto"
+                            ref={assignmentOfficersScrollRef}
+                          >
+                            <RadioGroup
+                              value={String(selectedAssignmentExecutiveIndex)}
+                              onValueChange={(v) =>
+                                setSelectedAssignmentExecutiveIndex(
+                                  parseInt(v, 10)
+                                )
+                              }
+                              className="inline-block min-w-0"
+                            >
+                              <div className="flex gap-4 w-max">
+                                {assignmentExecutives.map((exec, idx) => (
+                                  <Label
+                                    key={idx}
+                                    className={`flex flex-col cursor-pointer border-2 rounded-xl p-4 min-w-[200px] transition-all ${
+                                      selectedAssignmentExecutiveIndex === idx
+                                        ? "border-primary bg-primary/5"
+                                        : "border-gray-200 hover:border-gray-300"
+                                    }`}
+                                  >
+                                    <RadioGroupItem
+                                      value={String(idx)}
+                                      className="sr-only"
+                                    />
+                                    <div className="font-semibold text-foreground">
+                                      {exec.name || "—"}
+                                    </div>
+                                    <div className="text-xs text-muted-foreground mt-1">
+                                      {exec.designation || ""}
+                                    </div>
+                                    {exec.email && (
+                                      <div className="text-xs text-primary mt-1 truncate">
+                                        {exec.email}
+                                      </div>
+                                    )}
+                                  </Label>
+                                ))}
+                              </div>
+                            </RadioGroup>
+                          </div>
+                          <div className="flex gap-3">
+                            <Button
+                              variant="outline"
+                              onClick={() => setShowChangeOfficerSelect(false)}
+                            >
+                              Cancel
+                            </Button>
+                            <Button
+                              onClick={handleChangeOfficerConfirm}
+                              disabled={changingOfficer}
+                            >
+                              {changingOfficer ? (
+                                <>
+                                  <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                                  Changing...
+                                </>
+                              ) : (
+                                <>
+                                  <UserCheck className="w-4 h-4 mr-2" />
+                                  Confirm change
+                                </>
+                              )}
+                            </Button>
+                          </div>
+                        </>
+                      )}
+                    </div>
+                  ) : complaint?.isOfficerAssigned && !assignmentResult ? (
                     <div className="space-y-4">
                       <div className="p-4 border border-blue-200 rounded-lg bg-blue-50/50">
                         <div className="flex items-center gap-3">
@@ -3018,6 +3513,27 @@ const ComplaintDetailPage: React.FC = () => {
                           </div>
                         </div>
                       )}
+
+                      {/* Unassign & Change officer actions */}
+                      <div className="mt-6 pt-4 border-t border-gray-200 flex flex-wrap gap-3">
+                        <Button
+                          variant="outline"
+                          className="border-amber-600 text-amber-700 hover:bg-amber-50 hover:text-amber-800"
+                          onClick={() => setShowChangeOfficerModal(true)}
+                          disabled={changingOfficer}
+                        >
+                          <Users className="w-4 h-4 mr-2" />
+                          Change assigned officer
+                        </Button>
+                        <Button
+                          variant="destructive"
+                          onClick={() => setShowUnassignModal(true)}
+                          disabled={unassigning}
+                        >
+                          <XCircle className="w-4 h-4 mr-2" />
+                          Unassign officer
+                        </Button>
+                      </div>
                     </div>
                   ) : !(complaint as any)?.selected_officer ? (
                     <div className="text-center py-12">
@@ -3694,6 +4210,64 @@ const ComplaintDetailPage: React.FC = () => {
               ) : (
                 "Delete"
               )}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      {/* Unassign officer – danger modal */}
+      <AlertDialog open={showUnassignModal} onOpenChange={setShowUnassignModal}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle className="text-destructive">
+              Unassign officer
+            </AlertDialogTitle>
+            <AlertDialogDescription>
+              This will remove the officer from this complaint. The complaint
+              will return to pending and the officer will no longer see it in
+              their list. This action can be undone by assigning again. Do you
+              want to continue?
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={handleUnassignConfirm}
+              disabled={unassigning}
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+            >
+              {unassigning ? (
+                <>
+                  <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                  Unassigning...
+                </>
+              ) : (
+                "Yes, unassign"
+              )}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      {/* Change assigned officer – confirm modal */}
+      <AlertDialog
+        open={showChangeOfficerModal}
+        onOpenChange={setShowChangeOfficerModal}
+      >
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Change assigned officer</AlertDialogTitle>
+            <AlertDialogDescription>
+              Do you really want to change the assigned officer? You will select
+              a new officer and the complaint will be reassigned to them. The
+              letter recipient and draft letter &quot;To&quot; field will be
+              updated accordingly.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction onClick={handleChangeOfficerContinue}>
+              Continue
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>

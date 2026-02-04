@@ -25,7 +25,6 @@ import {
 import { useComplaints } from "@/hooks/useComplaints";
 import { useAuth } from "@/hooks/useAuth";
 import { complaintsService } from "@/services/complaints.service";
-import ComplaintTimeline from "@/components/complaints/ComplaintTimeline";
 import {
   Search,
   Filter,
@@ -35,6 +34,10 @@ import {
   XCircle,
   AlertCircle,
   Tag,
+  CheckCircle2,
+  FileText,
+  UserCheck,
+  MessageSquare,
 } from "lucide-react";
 
 const ComplaintsPage: React.FC = () => {
@@ -188,33 +191,89 @@ const ComplaintsPage: React.FC = () => {
   const getPriorityBadge = (priority: string) => {
     const config = {
       low: {
-        iconColor: "text-green-600",
+        bgColor: "bg-green-50",
+        textColor: "text-green-600",
         label: "Low",
       },
       medium: {
-        iconColor: "text-yellow-500",
+        bgColor: "bg-yellow-50",
+        textColor: "text-yellow-600",
         label: "Medium",
       },
       high: {
-        iconColor: "text-orange-500",
+        bgColor: "bg-orange-50",
+        textColor: "text-orange-600",
         label: "High",
       },
       urgent: {
-        iconColor: "text-red-700",
+        bgColor: "bg-red-50",
+        textColor: "text-red-600",
         label: "Urgent",
       },
     };
     const priorityConfig =
       config[priority as keyof typeof config] || config.medium;
     return (
-      <Badge
-        variant="outline"
-        className="flex items-center gap-1 bg-transparent border-0 text-foreground"
+      <span
+        className={`inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-medium ${priorityConfig.bgColor} ${priorityConfig.textColor}`}
       >
-        <Tag className={`w-3 h-3 ${priorityConfig.iconColor}`} />
+        <Tag className={`w-3 h-3 ${priorityConfig.textColor}`} />
         {priorityConfig.label}
-      </Badge>
+      </span>
     );
+  };
+
+  const calculateProgressSteps = (complaint: any) => {
+    const steps = [
+      {
+        id: 1,
+        label: "Complaint",
+        icon: CheckCircle2,
+        completed: !!(
+          complaint.createdAt ||
+          (complaint as any).created_at ||
+          (complaint as any).submittedAt
+        ),
+      },
+      {
+        id: 2,
+        label: "Draft",
+        icon: FileText,
+        completed: !!(
+          (complaint as any).drafted_letter || complaint.drafted_letter
+        ),
+      },
+      {
+        id: 3,
+        label: "Officer",
+        icon: UserCheck,
+        completed: !!(
+          complaint.isOfficerAssigned || (complaint as any).is_officer_assigned
+        ),
+      },
+      {
+        id: 4,
+        label: "Officer",
+        icon: MessageSquare,
+        completed: !!(
+          (complaint as any).officerRemarks ||
+          (complaint as any).officer_remarks ||
+          complaint.officerFeedback
+        ),
+      },
+      {
+        id: 5,
+        label: "Complaint",
+        icon: CheckCircle2,
+        completed: !!(
+          complaint.isComplaintClosed ||
+          (complaint as any).is_closed ||
+          (complaint as any).closingDetails
+        ),
+      },
+    ];
+    const completed = steps.filter((s) => s.completed).length;
+    return { steps, completed, total: 5 };
   };
 
   // Use my complaints if on my-complaints page, otherwise use all complaints
@@ -279,7 +338,7 @@ const ComplaintsPage: React.FC = () => {
       console.log("Filtered Complaints:", filteredComplaints.length);
       console.log(
         "Sample complaint categories:",
-        complaints?.slice(0, 3).map((c) => c.category)
+        complaints?.slice(0, 3).map((c) => c.category),
       );
     }
   }, [categoryFilter, complaints, filteredComplaints]);
@@ -458,70 +517,147 @@ const ComplaintsPage: React.FC = () => {
         ) : (
           filteredComplaints.map((complaint) => {
             const complaintId = complaint.id || complaint._id;
+            const { steps, completed, total } =
+              calculateProgressSteps(complaint);
+            const progressPercentage = (completed / total) * 100;
+            const location =
+              complaint.location ||
+              (complaint as any).area ||
+              (complaint as any).village_name ||
+              "";
+            const districtName =
+              (complaint as any).district_name || complaint.districtName || "";
+            const subdistrictName =
+              (complaint as any).subdistrict_name ||
+              complaint.subdistrictName ||
+              "";
+            const pincode = (complaint as any).pincode || "";
+            const submittedDate =
+              (complaint as any).created_at ||
+              complaint.createdAt ||
+              (complaint as any).submittedAt;
+
             return (
               <Card
                 key={complaintId}
-                className="border-[#011a60] border-2 hover:border-blue-900/60 hover:shadow-[0_4px_12px_rgba(30,58,138,0.15)] transition-all cursor-pointer "
+                className="group border border-slate-200 bg-white shadow-sm hover:shadow-lg hover:border-slate-300 transition-all duration-300 cursor-pointer overflow-hidden"
                 onClick={() => {
-                  console.log(
-                    "Navigating to complaint:",
-                    complaintId,
-                    "Full complaint:",
-                    complaint
-                  );
                   navigate(`/admin/complaints/${complaintId}`);
                 }}
               >
-                <CardHeader>
+                <CardHeader className="pb-4 space-y-3">
+                  {/* Top Row: Status and Priority */}
                   <div className="flex items-start justify-between">
-                    <div className="flex-1">
-                      <div className="flex items-center gap-2 mb-2 flex-wrap">
-                        {complaint.complaintId && (
-                          <Badge
-                            variant="outline"
-                            className="border-blue-900/40 text-foreground"
-                          >
-                            {complaint.complaintId}
-                          </Badge>
-                        )}
-                        {getStatusBadge(complaint.status)}
-                        {getPriorityBadge(complaint.priority)}
-                      </div>
-                      <CardTitle className="text-lg text-foreground">
-                        {complaint.title}
-                      </CardTitle>
-                      <CardDescription className="mt-2 line-clamp-2">
-                        {complaint.description}
-                      </CardDescription>
+                    <div className="flex items-center gap-2 flex-wrap">
+                      {getStatusBadge(complaint.status)}
+                      {getPriorityBadge(complaint.priority)}
                     </div>
-                  </div>
-                </CardHeader>
-                <CardContent className="space-y-4">
-                  {/* Timeline */}
-                  <ComplaintTimeline complaint={complaint} variant="compact" />
-
-                  <div className="flex items-center gap-4 text-sm text-muted-foreground flex-wrap">
-                    <span>Category: {complaint.category}</span>
-                    <span>•</span>
-                    <span>
-                      Submitted:{" "}
-                      {(complaint as any).created_at ||
-                      complaint.createdAt ||
-                      (complaint as any).submittedAt
-                        ? new Date(
-                            (complaint as any).created_at ||
-                              complaint.createdAt ||
-                              (complaint as any).submittedAt
-                          ).toLocaleDateString()
-                        : "N/A"}
-                    </span>
-                    {complaint.location && (
-                      <>
-                        <span>•</span>
-                        <span>{complaint.location}</span>
-                      </>
+                    {complaint.complaint_id && (
+                      <span className="text-xs font-mono font-medium text-slate-500 bg-slate-50 px-2.5 py-1 rounded-md">
+                        {complaint.complaint_id}
+                      </span>
                     )}
                   </div>
+
+                  {/* Title */}
+                  <CardTitle className="text-base font-semibold text-slate-900 leading-snug group-hover:text-primary transition-colors line-clamp-2">
+                    {complaint.title}
+                  </CardTitle>
+
+                  {/* Description */}
+                  <CardDescription className="text-sm text-slate-600 line-clamp-2 leading-relaxed">
+                    {complaint.description}
+                  </CardDescription>
+                </CardHeader>
+
+                <CardContent className="pt-0 space-y-4">
+                  {/* Progress Section */}
+                  <div className="space-y-2.5">
+                    <div className="flex items-center justify-between">
+                      <span className="text-xs font-semibold text-slate-700 uppercase tracking-wide">
+                        Progress
+                      </span>
+                      <span className="text-xs font-semibold text-slate-900">
+                        {completed}/{total} steps
+                      </span>
+                    </div>
+                    {/* Progress Bar with Gradient */}
+                    <div className="h-2 bg-slate-100 rounded-full overflow-hidden">
+                      <div
+                        className="h-full bg-gradient-to-r from-blue-500 via-blue-600 to-emerald-500 rounded-full transition-all duration-700"
+                        style={{ width: `${progressPercentage}%` }}
+                      />
+                    </div>
+                    {/* Step Icons */}
+                    <div className="flex items-center justify-between gap-1 mt-2">
+                      {steps.map((step) => {
+                        const Icon = step.icon;
+                        return (
+                          <div
+                            key={step.id}
+                            className="flex flex-col items-center flex-1"
+                            title={step.label}
+                          >
+                            <div
+                              className={`w-8 h-8 rounded-full flex items-center justify-center transition-all ${
+                                step.completed
+                                  ? "bg-green-500 text-white"
+                                  : "bg-slate-200 text-slate-400"
+                              }`}
+                            >
+                              <Icon className="w-4 h-4" />
+                            </div>
+                            <span
+                              className={`text-[10px] mt-1 text-center leading-tight ${
+                                step.completed
+                                  ? "text-slate-900 font-medium"
+                                  : "text-slate-400"
+                              }`}
+                            >
+                              {step.label}
+                            </span>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </div>
+
+                  {/* Category and Submission Date */}
+                  <div className="flex items-center gap-2 py-2 border-y border-slate-100">
+                    <span className="text-xs font-medium text-slate-500">
+                      Category: {complaint.category}
+                    </span>
+                    <span className="text-slate-300">•</span>
+                    <span className="text-xs font-medium text-slate-500">
+                      Submitted:{" "}
+                      {submittedDate
+                        ? new Date(submittedDate).toLocaleDateString("en-IN", {
+                            day: "numeric",
+                            month: "numeric",
+                            year: "numeric",
+                          })
+                        : "N/A"}
+                    </span>
+                  </div>
+
+                  {/* Location Information */}
+                  {location && (
+                    <div className="text-xs text-slate-600 space-y-1">
+                      <div className="font-medium">
+                        {location}
+                        {districtName && `, ${districtName}`}
+                        {subdistrictName && `, ${subdistrictName}`}
+                        {pincode && `, ${pincode}`}
+                      </div>
+                      {(districtName || subdistrictName || pincode) && (
+                        <div className="text-slate-500">
+                          {subdistrictName && `Locality: ${subdistrictName}`}
+                          {districtName && ` • City: ${districtName}`}
+                          {pincode && ` • Pincode: ${pincode}`}
+                        </div>
+                      )}
+                    </div>
+                  )}
                 </CardContent>
               </Card>
             );

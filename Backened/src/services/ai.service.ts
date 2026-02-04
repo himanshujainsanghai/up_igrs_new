@@ -9,7 +9,16 @@ import logger from "../config/logger";
 import { AIStepExecutionInstruction } from "../models/AIStepExecutionInstruction";
 import { AIResolutionStep } from "../models/AIResolutionStep";
 import { Complaint } from "../models/Complaint";
+import {
+  ComplaintDocumentSummary,
+  type IComplaintDocumentSummary,
+} from "../models/ComplaintDocumentSummary";
 import { NotFoundError } from "../utils/errors";
+import { extractKeyFromUrl, generatePresignedUrl } from "./upload.service";
+import {
+  appendDocumentsSummarized,
+  type TimelineActor,
+} from "./complaintTimeline.service";
 
 // OpenRouter Configuration
 const OPENROUTER_API_KEY = env.OPENROUTER_API_KEY || env.OPENAI_API_KEY || ""; // Fallback to OpenAI key if needed
@@ -18,6 +27,8 @@ const OPENROUTER_API_URL = "https://openrouter.ai/api/v1/chat/completions";
 // Default model configuration
 const DEFAULT_MODEL = env.OPENROUTER_MODEL || "openai/gpt-4o"; // Can use: anthropic/claude-3.5-sonnet, openai/gpt-4o, etc.
 const DEFAULT_VISION_MODEL = env.OPENROUTER_VISION_MODEL || "openai/gpt-4o"; // For vision tasks
+const DOC_SUMMARIZE_MODEL =
+  env.DOC_SUMMARIZE_MODEL || "google/gemini-3-flash-preview"; // For document summarization
 
 /**
  * Debug logging for AI service
@@ -360,6 +371,302 @@ export const callVisionLLMBatch = async (
       `All vision models failed for batch processing. Last error: ${error.message}. Please check OpenRouter API key and model availability.`
     );
   }
+};
+
+/**
+ * Resolve S3 document URLs to accessible URLs (presigned for private bucket).
+ * URLs that are not from our S3 bucket are returned unchanged.
+ */
+const resolveDocumentUrlsToAccessible = async (
+  s3Urls: string[]
+): Promise<string[]> => {
+  const resolved: string[] = [];
+  for (const url of s3Urls) {
+    const key = extractKeyFromUrl(url);
+    if (key) {
+      try {
+        const presigned = await generatePresignedUrl(key);
+        resolved.push(presigned);
+      } catch (err) {
+        logger.warn(
+          `Failed to generate presigned URL for key ${key}, using original:`,
+          err
+        );
+        resolved.push(url);
+      }
+    } else {
+      resolved.push(url);
+    }
+  }
+  return resolved;
+};
+
+/** Complaint context passed when useComplaintContext is true */
+export interface DocumentSummaryComplaintContext {
+  title: string;
+  description: string;
+  contact_name: string;
+  contact_email: string;
+  contact_phone?: string;
+  location?: string;
+  category: string;
+  subdistrict_name?: string;
+  district_name?: string;
+  village_name?: string;
+}
+
+/**
+ * Generate a comprehensive summary from complaint attachment documents (images[]).
+ * Uses DOC_SUMMARIZE_MODEL. When useComplaintContext is true, summary is tied to the complaint.
+ */
+export const generateDocumentSummary = async (options: {
+  documentUrls: string[];
+  useComplaintContext: boolean;
+  complaintContext?: DocumentSummaryComplaintContext;
+  userPrompt?: string;
+}): Promise<string> => {
+  const { documentUrls, useComplaintContext, complaintContext, userPrompt } =
+    options;
+
+  if (!documentUrls || documentUrls.length === 0) {
+    throw new Error("No document URLs provided to summarize.");
+  }
+
+  const accessibleUrls = await resolveDocumentUrlsToAccessible(documentUrls);
+  const systemPrompt = `You are an expert document analyst for the Uttar Pradesh (UP) government grievance redressal system (IGRS/MLC Portal). You will analyze complaint-related documents (images, PDFs, scanned letters, applications, identity proofs, bills, receipts, photos of issues, previous correspondence, etc.) and produce a structured, actionable summary for government officials.
+
+**CRITICAL INSTRUCTIONS:**
+
+1. **LANGUAGE PRESERVATION**: Maintain the EXACT language(s) used in documents (Hindi/English/Hinglish). If documents are in Hindi, write summary in Hindi. If mixed, use mixed language. Do NOT translate unnecessarily.
+
+2. **FACTUAL ACCURACY - NO HALLUCINATION**: 
+   - Extract ONLY information explicitly present in the documents
+   - If something is unclear/illegible, state "दस्तावेज़ में अस्पष्ट" or "Unclear in document"
+   - NEVER fabricate or assume facts not visible in documents
+   - If a detail is requested but not in documents, explicitly state "दस्तावेज़ में उल्लेख नहीं" or "Not mentioned in documents"
+
+3. **EXTRACT & STRUCTURE THE FOLLOWING** (in order of importance):
+
+   a) **LOCATION DETAILS** (सर्वाधिक महत्वपूर्ण/Most Critical):
+      - ज़िला (District)
+      - तहसील/उप-ज़िला (Tehsil/Sub-district)
+      - गाँव/नगर/वार्ड (Village/Town/Ward)
+      - मोहल्ला/क्षेत्र (Area/Locality/Mohalla)
+      - पता/निशान (Address/Landmark)
+      - पिन कोड (Pin Code)
+      **→ If location is vague, note: "स्थान की पूर्ण जानकारी अनुपलब्ध"**
+
+   b) **GOVERNMENT DEPARTMENT & OFFICER DETAILS**:
+      - Identify the RELEVANT UP Government Department (e.g., राजस्व विभाग, पुलिस, लोक निर्माण विभाग, जल निगम, बिजली विभाग, शिक्षा, स्वास्थ्य, etc.)
+      - Extract ANY mentioned officer name, designation, or office (e.g., "तहसीलदार", "थाना प्रभारी", "SDM", "BDO", etc.)
+      - Note if complaint involves MULTIPLE departments
+
+   c) **COMPLAINANT & AFFECTED PARTY**:
+      - Name(s), mobile number(s), email (if present in documents)
+      - Note if different from registered complaint details
+      - Relation to the issue (पीड़ित/complainant, प्रतिनिधि/representative, etc.)
+
+   d) **CATEGORY/SUBCATEGORY VALIDATION**:
+      - Based on document content, confirm if the assigned complaint category is appropriate
+      - Suggest relevant category if documents indicate a different issue
+
+   e) **CORE ISSUE & EVIDENCE**:
+      - What is the MAIN problem/grievance (मुख्य समस्या)?
+      - Supporting evidence from documents: photos, bills, receipts, medical reports, previous complaints, FIR copies, government letters, etc.
+      - Key dates, reference numbers, case numbers, application numbers
+      - Names of accused/responsible parties (if any)
+
+   f) **DEMAND/REQUEST (मांग/निवेदन)**:
+      - What does the complainant want? (compensation, action against officer, service restoration, infrastructure repair, etc.)
+      - Any monetary amount demanded
+
+   g) **SEVERITY & URGENCY INDICATORS**:
+      - **Corruption/Bribery Allegations**: भ्रष्टाचार का आरोप (mention officer/department)
+      - **Police Misconduct/Inaction**: पुलिस की लापरवाही या दुर्व्यवहार
+      - **Threat to Life/Safety**: जान-माल का खतरा
+      - **Medical Emergency**: चिकित्सा आपातकाल
+      - **Time-Sensitive Issue**: समय-सीमा संवेदनशील (e.g., upcoming exam, eviction notice, court date)
+      - **Vulnerable Groups**: वृद्ध/बीमार/विकलांग/महिला/बच्चा
+      **→ If NONE of above, state: "साधारण प्राथमिकता / Normal priority"**
+
+   h) **RECOMMENDED NEXT STEPS (अनुशंसित कार्रवाई)**:
+      - Based on documents and UP Government procedures, suggest:
+        * Which department/office should handle this
+        * Immediate actions required (site inspection, notice to officer, FIR, compensation review, etc.)
+        * Relevant acts/rules/government orders (if mentioned in documents or commonly applicable)
+        * Whether case needs escalation to District Magistrate/MLC
+
+4. **OUTPUT FORMAT**: Produce a clear, well-structured summary in PLAIN TEXT (NOT JSON). Use headings/sections for readability. Be concise but comprehensive. Aim for 300-800 words depending on document complexity.`;
+
+  const contextBlock =
+    useComplaintContext && complaintContext
+      ? `
+
+═══════════════════════════════════════════════════════════════════
+📋 REGISTERED COMPLAINT CONTEXT (शिकायत संदर्भ)
+═══════════════════════════════════════════════════════════════════
+शीर्षक/Title: ${complaintContext.title}
+विवरण/Description: ${complaintContext.description}
+
+शिकायतकर्ता/Complainant: ${complaintContext.contact_name}
+Email: ${complaintContext.contact_email}${
+          complaintContext.contact_phone
+            ? `
+Phone: ${complaintContext.contact_phone}`
+            : ""
+        }
+
+स्थान/Location: ${
+          [
+            complaintContext.district_name,
+            complaintContext.subdistrict_name,
+            complaintContext.village_name,
+            complaintContext.location,
+          ]
+            .filter(Boolean)
+            .join(", ") ||
+          "स्थान की जानकारी प्रदान नहीं की गई / Location not provided"
+        }
+
+श्रेणी/Category: ${complaintContext.category}
+═══════════════════════════════════════════════════════════════════
+
+**YOUR TASK**: Analyze the attached documents in relation to this complaint. In your summary:
+1. **Cross-verify** if document details match the registered complaint (especially location, complainant name, issue description)
+2. **Highlight discrepancies** if any (e.g., documents show different location/person/issue than registered)
+3. **Extract additional details** from documents that are NOT in the complaint form but are crucial (officer names, dates, previous case numbers, evidence photos, etc.)
+4. **Validate complaint category** - do the documents support the assigned category or suggest a different one?
+5. **Assess document quality** - are all key supporting documents present? What's missing (e.g., no photo evidence, no identity proof, no bills)?
+6. **Provide actionable next steps** based on what the documents reveal and UP Government procedures
+`
+      : `
+
+═══════════════════════════════════════════════════════════════════
+⚠️  STANDALONE DOCUMENT ANALYSIS (without complaint context)
+═══════════════════════════════════════════════════════════════════
+
+**YOUR TASK**: Analyze these documents independently without any complaint context. In your summary:
+1. **Identify document types** (application letter, photo evidence, identity proof, bill/receipt, medical report, police complaint, etc.)
+2. **Extract ALL critical information** as per the structured format in system instructions
+3. **Infer the nature of grievance** from documents alone
+4. **Note missing information** that would be needed for processing this as a complaint
+5. **Suggest appropriate government department** and category based on document content
+6. **Recommend immediate actions** that should be taken based on what documents reveal
+`;
+
+  const userPromptBlock =
+    userPrompt && userPrompt.trim()
+      ? `
+
+═══════════════════════════════════════════════════════════════════
+👤 ADDITIONAL USER INSTRUCTIONS (उपयोगकर्ता का अतिरिक्त निर्देश)
+═══════════════════════════════════════════════════════════════════
+${userPrompt.trim()}
+
+**Note**: Follow the above user instruction while maintaining all other requirements (factual accuracy, structured format, language preservation, actionable recommendations).
+═══════════════════════════════════════════════════════════════════
+`
+      : "";
+
+  const promptToModel = `
+📄 **DOCUMENT ANALYSIS REQUEST** 📄
+
+Total Documents to Analyze: ${accessibleUrls.length}
+${contextBlock}${userPromptBlock}
+
+════════════════════════════════════════════════════════════════════
+🎯 **FINAL INSTRUCTIONS**
+════════════════════════════════════════════════════════════════════
+- Analyze ALL ${accessibleUrls.length} attached document(s) thoroughly
+- Extract information following the structured format in system instructions
+- Write in the SAME language as the documents (Hindi/English/Mixed)
+- Be factual - do NOT fabricate information not present in documents
+- Provide ACTIONABLE recommendations for UP Government officials
+- Output format: PLAIN TEXT with clear headings (NOT JSON)
+- Length: 300-800 words (adjust based on document complexity)
+- Focus on: Location → Department → Issue → Evidence → Severity → Action Required
+
+**BEGIN YOUR ANALYSIS NOW:**
+════════════════════════════════════════════════════════════════════
+`;
+
+  logger.info(
+    `Generating document summary with DOC_SUMMARIZE_MODEL=${DOC_SUMMARIZE_MODEL}, useComplaintContext=${useComplaintContext}, documents=${accessibleUrls.length}`
+  );
+
+  const response = await callVisionLLMBatch(
+    accessibleUrls,
+    promptToModel,
+    systemPrompt,
+    {
+      model: DOC_SUMMARIZE_MODEL,
+      maxTokens: 4000,
+      temperature: 0.2,
+      detail: "high",
+    }
+  );
+
+  return response?.trim() || "";
+};
+
+/**
+ * Generate document summary, persist to ComplaintDocumentSummary, and append timeline event.
+ * Use this when the caller wants both storage and timeline audit. Timeline only (no notification).
+ */
+export const summarizeAndSaveDocuments = async (options: {
+  complaintId: string;
+  documentUrls: string[];
+  useComplaintContext: boolean;
+  complaintContext?: DocumentSummaryComplaintContext;
+  userPrompt?: string;
+  actor?: TimelineActor;
+}): Promise<{
+  summaryText: string;
+  summaryRecord: import("mongoose").HydratedDocument<IComplaintDocumentSummary>;
+}> => {
+  const {
+    complaintId,
+    documentUrls,
+    useComplaintContext,
+    complaintContext,
+    userPrompt,
+    actor,
+  } = options;
+
+  const summaryText = await generateDocumentSummary({
+    documentUrls,
+    useComplaintContext,
+    complaintContext,
+    userPrompt,
+  });
+
+  const summaryRecord = await ComplaintDocumentSummary.create({
+    complaint_id: complaintId,
+    summary: summaryText,
+    use_complaint_context: useComplaintContext,
+    document_count: documentUrls.length,
+    user_prompt: userPrompt,
+  });
+
+  try {
+    await appendDocumentsSummarized(
+      complaintId,
+      {
+        summary_id: summaryRecord.id,
+        document_count: summaryRecord.document_count,
+        use_complaint_context: summaryRecord.use_complaint_context,
+        user_prompt_excerpt:
+          summaryRecord.user_prompt != null && summaryRecord.user_prompt !== ""
+            ? summaryRecord.user_prompt.slice(0, 200)
+            : undefined,
+      },
+      actor
+    );
+  } catch (err) {
+    logger.warn("Timeline appendDocumentsSummarized failed:", err);
+  }
+
+  return { summaryText, summaryRecord };
 };
 
 /**
@@ -1446,6 +1753,7 @@ export default {
   callVisionLLM,
   callVisionLLMBatch,
   generateAIAnalysis,
+  generateDocumentSummary,
   processDocumentImage,
   processDocumentsBatch,
   researchRelatedIssues,

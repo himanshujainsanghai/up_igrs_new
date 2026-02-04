@@ -37,6 +37,7 @@ import {
   X,
   ChevronLeft,
   ChevronRight,
+  Bell,
 } from "lucide-react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -258,6 +259,12 @@ const AdminLayout: React.FC<AdminLayoutProps> = ({ children, stats }) => {
       icon: Users,
       label: "User Management",
       adminOnly: true, // Only show to admins
+    },
+    {
+      type: "item",
+      path: "/admin/notifications",
+      icon: Bell,
+      label: "Notifications",
     },
     {
       type: "item",

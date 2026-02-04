@@ -27,6 +27,11 @@ import FileComplaint from "@/pages/FileComplaint";
 import RequestMeeting from "@/pages/RequestMeeting";
 import Feedback from "@/pages/Feedback";
 import NotFound from "@/pages/NotFound";
+import PrivacyPolicy from "@/pages/PrivacyPolicy";
+import TermsAndConditions from "@/pages/TermsAndConditions";
+import UserRights from "@/pages/UserRights";
+import Contact from "@/pages/Contact";
+import About from "@/pages/About";
 import Dashboard from "@/pages/admin/Dashboard";
 import ComplaintsPage from "@/pages/admin/ComplaintsPage";
 import ComplaintsHeatMapPage from "@/pages/admin/ComplaintsHeatMapPage";
@@ -39,12 +44,14 @@ import DocumentsPage from "@/pages/admin/DocumentsPage";
 import ReportsPage from "@/pages/admin/ReportsPage";
 import SettingsPage from "@/pages/admin/SettingsPage";
 import UserManagementPage from "@/pages/admin/UserManagementPage";
+import NotificationsPage from "@/pages/admin/NotificationsPage";
 import BadaunMapTestPage from "./pages/admin/BadaunMapTestPage";
 import BadaunHeatMapPage from "./pages/admin/BadaunHeatMapPage";
 import HierarchicalDataUploadPage from "./pages/admin/HierarchicalDataUploadPage";
 import IndiaMapPage from "./pages/admin/IndiaMapPage";
 import MyComplaintsPage from "./pages/officer/MyComplaintsPage";
 import OfficerComplaintDetailPage from "./pages/officer/OfficerComplaintDetailPage";
+import OfficerNotificationsPage from "./pages/officer/NotificationsPage";
 
 // Create React Query client
 const queryClient = new QueryClient({
@@ -223,6 +230,10 @@ const AppContent: React.FC = () => {
                                 </ProtectedRoute>
                               }
                             />
+                            <Route
+                              path="notifications"
+                              element={<NotificationsPage />}
+                            />
                             <Route path="settings" element={<SettingsPage />} />
                           </Routes>
                         </AdminLayout>
@@ -241,6 +252,10 @@ const AppContent: React.FC = () => {
                             <Route
                               path="complaints/:id"
                               element={<OfficerComplaintDetailPage />}
+                            />
+                            <Route
+                              path="notifications"
+                              element={<OfficerNotificationsPage />}
                             />
                             <Route path="settings" element={<SettingsPage />} />
                           </Routes>
@@ -266,6 +281,17 @@ const AppContent: React.FC = () => {
                             element={<RequestMeeting />}
                           />
                           <Route path="/feedback" element={<Feedback />} />
+                          <Route
+                            path="/privacy-policy"
+                            element={<PrivacyPolicy />}
+                          />
+                          <Route
+                            path="/terms-and-conditions"
+                            element={<TermsAndConditions />}
+                          />
+                          <Route path="/user-rights" element={<UserRights />} />
+                          <Route path="/contact" element={<Contact />} />
+                          <Route path="/about" element={<About />} />
                           <Route path="/complaints" element={<Complaints />} />
                           <Route path="*" element={<NotFound />} />
                         </Routes>

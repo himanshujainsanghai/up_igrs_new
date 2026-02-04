@@ -79,6 +79,18 @@ router.get(
   complaintsController.getMyComplaints
 ); // Get officer's assigned complaints (officer only)
 
+// Solo unassign (must be before /:id) – body: { complaintId }
+router.put(
+  "/unassign",
+  authenticate,
+  authorize("admin"),
+  complaintsController.unassignComplaintSolo
+); // Unassign officer from complaint (admin only); body: { complaintId }
+
+// Timeline (must be before /:id so /:id/timeline and /:id/assignment-history match)
+router.get("/:id/timeline", complaintsController.getComplaintTimeline); // Get complaint timeline
+router.get("/:id/assignment-history", complaintsController.getComplaintAssignmentHistory); // Get assignment history
+
 // Get single complaint (must be after all specific routes)
 router.get("/:id", complaintsController.getComplaintById); // Get single complaint
 
@@ -109,6 +121,13 @@ router.put(
   authorize("admin"),
   complaintsController.unassignComplaint
 ); // Unassign complaint (admin only)
+
+router.put(
+  "/:id/reassign-officer",
+  authenticate,
+  authorize("admin"),
+  complaintsController.reassignOfficer
+); // Reassign complaint to another officer (admin only); body: { officerId }
 
 router.put(
   "/:id/research",

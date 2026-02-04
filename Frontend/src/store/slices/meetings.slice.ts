@@ -2,9 +2,9 @@
  * Meetings Redux Slice
  */
 
-import { createSlice, createAsyncThunk, PayloadAction } from '@reduxjs/toolkit';
-import { Meeting, MeetingRequest } from '@/types';
-import { meetingsService } from '@/services/meetings.service';
+import { createSlice, createAsyncThunk, PayloadAction } from "@reduxjs/toolkit";
+import { Meeting, MeetingRequest } from "@/types";
+import { meetingsService } from "@/services/meetings.service";
 
 interface MeetingsState {
   meetings: Meeting[];
@@ -34,55 +34,81 @@ const initialState: MeetingsState = {
 
 // Async thunks
 export const fetchMeetings = createAsyncThunk(
-  'meetings/fetchMeetings',
-  async ({ page = 1, limit = 20 }: { page?: number; limit?: number }, { rejectWithValue }) => {
+  "meetings/fetchMeetings",
+  async (
+    {
+      page = 1,
+      limit = 20,
+      status,
+    }: { page?: number; limit?: number; status?: string },
+    { rejectWithValue },
+  ) => {
     try {
-      const response = await meetingsService.getMeetings(page, limit);
+      const response = await meetingsService.getMeetings(page, limit, status);
       return response;
     } catch (error: any) {
-      return rejectWithValue(error.response?.data?.error || error.message || 'Failed to fetch meetings');
+      return rejectWithValue(
+        error.response?.data?.error ||
+          error.message ||
+          "Failed to fetch meetings",
+      );
     }
-  }
+  },
 );
 
 export const fetchMeetingById = createAsyncThunk(
-  'meetings/fetchMeetingById',
+  "meetings/fetchMeetingById",
   async (id: string, { rejectWithValue }) => {
     try {
       const meeting = await meetingsService.getMeetingById(id);
       return meeting;
     } catch (error: any) {
-      return rejectWithValue(error.response?.data?.error || error.message || 'Failed to fetch meeting');
+      return rejectWithValue(
+        error.response?.data?.error ||
+          error.message ||
+          "Failed to fetch meeting",
+      );
     }
-  }
+  },
 );
 
 export const createMeeting = createAsyncThunk(
-  'meetings/createMeeting',
+  "meetings/createMeeting",
   async (meeting: MeetingRequest, { rejectWithValue }) => {
     try {
       const newMeeting = await meetingsService.createMeeting(meeting);
       return newMeeting;
     } catch (error: any) {
-      return rejectWithValue(error.response?.data?.error || error.message || 'Failed to create meeting');
+      return rejectWithValue(
+        error.response?.data?.error ||
+          error.message ||
+          "Failed to create meeting",
+      );
     }
-  }
+  },
 );
 
 export const updateMeeting = createAsyncThunk(
-  'meetings/updateMeeting',
-  async ({ id, updates }: { id: string; updates: Partial<Meeting> }, { rejectWithValue }) => {
+  "meetings/updateMeeting",
+  async (
+    { id, updates }: { id: string; updates: Partial<Meeting> },
+    { rejectWithValue },
+  ) => {
     try {
       const updatedMeeting = await meetingsService.updateMeeting(id, updates);
       return updatedMeeting;
     } catch (error: any) {
-      return rejectWithValue(error.response?.data?.error || error.message || 'Failed to update meeting');
+      return rejectWithValue(
+        error.response?.data?.error ||
+          error.message ||
+          "Failed to update meeting",
+      );
     }
-  }
+  },
 );
 
 const meetingsSlice = createSlice({
-  name: 'meetings',
+  name: "meetings",
   initialState,
   reducers: {
     setCurrentMeeting: (state, action: PayloadAction<Meeting | null>) => {
@@ -150,7 +176,9 @@ const meetingsSlice = createSlice({
       })
       .addCase(updateMeeting.fulfilled, (state, action) => {
         state.loading = false;
-        const index = state.meetings.findIndex((m) => m._id === action.payload._id);
+        const index = state.meetings.findIndex(
+          (m) => m._id === action.payload._id,
+        );
         if (index !== -1) {
           state.meetings[index] = action.payload;
         }
@@ -167,4 +195,3 @@ const meetingsSlice = createSlice({
 
 export const { setCurrentMeeting, clearError } = meetingsSlice.actions;
 export default meetingsSlice.reducer;
-

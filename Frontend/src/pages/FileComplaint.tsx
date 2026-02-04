@@ -85,6 +85,7 @@ const FileComplaint: React.FC = () => {
   const [attachments, setAttachments] = useState<Attachment[]>([]);
   const [detectingLocation, setDetectingLocation] = useState(false);
   const [errors, setErrors] = useState<Record<string, string>>({});
+  const [showLocationReaskBanner, setShowLocationReaskBanner] = useState(false);
   const [activeTab, setActiveTab] = useState<"form" | "scan">("form");
   const [scanningDocument, setScanningDocument] = useState(false);
   const [scannedFile, setScannedFile] = useState<File | null>(null);
@@ -92,7 +93,7 @@ const FileComplaint: React.FC = () => {
 
   // Batch scanning state
   const [scannedDocuments, setScannedDocuments] = useState<ScannedDocument[]>(
-    []
+    [],
   );
   const [processedDocs, setProcessedDocs] = useState<any>(null);
 
@@ -105,7 +106,7 @@ const FileComplaint: React.FC = () => {
 
   // Helper function to get location with reverse geocoding
   const getLocationWithGeocoding = async (
-    position: GeolocationPosition
+    position: GeolocationPosition,
   ): Promise<{
     latitude: number;
     longitude: number;
@@ -119,7 +120,7 @@ const FileComplaint: React.FC = () => {
   }> => {
     try {
       const response = await fetch(
-        `https://us1.locationiq.com/v1/reverse?key=pk.50401737fbb5b194c8b98d17ca08a79f&lat=${position.coords.latitude}&lon=${position.coords.longitude}&format=json`
+        `https://us1.locationiq.com/v1/reverse?key=pk.50401737fbb5b194c8b98d17ca08a79f&lat=${position.coords.latitude}&lon=${position.coords.longitude}&format=json`,
       );
 
       if (!response.ok) {
@@ -194,7 +195,7 @@ const FileComplaint: React.FC = () => {
         location:
           detectedArea ||
           `Lat: ${position.coords.latitude.toFixed(
-            4
+            4,
           )}, Lng: ${position.coords.longitude.toFixed(4)}`,
         city,
         locality,
@@ -210,7 +211,7 @@ const FileComplaint: React.FC = () => {
         latitude: position.coords.latitude,
         longitude: position.coords.longitude,
         location: `Lat: ${position.coords.latitude.toFixed(
-          4
+          4,
         )}, Lng: ${position.coords.longitude.toFixed(4)}`,
         city: "",
         locality: "",
@@ -239,11 +240,11 @@ const FileComplaint: React.FC = () => {
 
             if (locationData.districtName && locationData.subdistrictName) {
               toast.success(
-                "Location detected. Your location has been auto-filled."
+                "Location detected. Your location has been auto-filled.",
               );
             } else {
               toast.warning(
-                "Location detected, but district/subdistrict could not be auto-filled. Please enter manually."
+                "Location detected, but district/subdistrict could not be auto-filled. Please enter manually.",
               );
             }
           } catch (error) {
@@ -253,22 +254,28 @@ const FileComplaint: React.FC = () => {
             setDetectingLocation(false);
           }
         },
-        (error) => {
+        (error: GeolocationPositionError) => {
           console.error("Geolocation error:", error);
-          toast.error(
-            "Unable to detect location. Please allow location access or enter manually."
-          );
+          if (error.code === 1) {
+            toast.error(
+              "This is a location-based service. Please allow location access to use auto-detect, or enter your location manually.",
+            );
+          } else {
+            toast.error(
+              "Unable to detect location. Please allow location access or enter manually.",
+            );
+          }
           setDetectingLocation(false);
         },
         {
           enableHighAccuracy: true,
           timeout: 10000,
           maximumAge: 0,
-        }
+        },
       );
     } else {
       toast.error(
-        "Geolocation is not supported by your browser. Please enter your location manually."
+        "Geolocation is not supported by your browser. Please enter your location manually.",
       );
     }
   };
@@ -327,7 +334,7 @@ const FileComplaint: React.FC = () => {
       // Add scanned file to attachments (avoid duplicates)
       setAttachments((prev) => {
         const alreadyExists = prev.some(
-          (att) => att.file.name === file.name && att.file.size === file.size
+          (att) => att.file.name === file.name && att.file.size === file.size,
         );
         if (alreadyExists) {
           return prev;
@@ -413,13 +420,13 @@ const FileComplaint: React.FC = () => {
           toast.success(
             `Document scanned! ${fieldsUpdated} field${
               fieldsUpdated > 1 ? "s" : ""
-            } auto-filled. File added to attachments.`
+            } auto-filled. File added to attachments.`,
           );
           // Switch to form tab to show the filled data
           setTimeout(() => setActiveTab("form"), 500);
         } else {
           toast.info(
-            "Document processed but no form fields could be auto-filled. File added to attachments."
+            "Document processed but no form fields could be auto-filled. File added to attachments.",
           );
         }
       } else if (result.extractedText || result.text) {
@@ -427,12 +434,12 @@ const FileComplaint: React.FC = () => {
         const extractedText = result.extractedText || result.text;
         setFormData((prev) => ({ ...prev, description: extractedText }));
         toast.success(
-          "Text extracted from document! File added to attachments."
+          "Text extracted from document! File added to attachments.",
         );
         setTimeout(() => setActiveTab("form"), 500);
       } else {
         toast.info(
-          "Document processed. File added to attachments. Please fill the form manually."
+          "Document processed. File added to attachments. Please fill the form manually.",
         );
       }
     } catch (error: any) {
@@ -440,7 +447,7 @@ const FileComplaint: React.FC = () => {
       toast.error(
         error?.response?.data?.message ||
           error?.message ||
-          "Failed to scan document"
+          "Failed to scan document",
       );
     } finally {
       setScanningDocument(false);
@@ -449,7 +456,7 @@ const FileComplaint: React.FC = () => {
 
   // Handle scan file upload for single or batch processing
   const handleScanFileUpload = async (
-    e: React.ChangeEvent<HTMLInputElement>
+    e: React.ChangeEvent<HTMLInputElement>,
   ) => {
     if (!e.target.files || e.target.files.length === 0) return;
 
@@ -545,14 +552,14 @@ const FileComplaint: React.FC = () => {
         (file) => ({
           file,
           preview: URL.createObjectURL(file),
-        })
+        }),
       );
 
       // Add new attachments to existing ones (avoid duplicates)
       setAttachments((prev) => {
         const existingFileNames = new Set(prev.map((att) => att.file.name));
         const uniqueNewAttachments = newAttachments.filter(
-          (att) => !existingFileNames.has(att.file.name)
+          (att) => !existingFileNames.has(att.file.name),
         );
         return [...prev, ...uniqueNewAttachments];
       });
@@ -614,7 +621,7 @@ const FileComplaint: React.FC = () => {
         }
 
         toast.success(
-          `${scannedDocuments.length} document(s) scanned successfully! Form fields have been auto-filled and files added to attachments.`
+          `${scannedDocuments.length} document(s) scanned successfully! Form fields have been auto-filled and files added to attachments.`,
         );
 
         // Switch to form tab to show the filled data
@@ -623,12 +630,12 @@ const FileComplaint: React.FC = () => {
         // If only text is extracted, fill description
         setFormData((prev) => ({ ...prev, description: mergedResult.text }));
         toast.success(
-          "Text extracted from documents! Files added to attachments."
+          "Text extracted from documents! Files added to attachments.",
         );
         setTimeout(() => setActiveTab("form"), 500);
       } else {
         toast.info(
-          "Documents processed. Files added to attachments. Please fill the form manually."
+          "Documents processed. Files added to attachments. Please fill the form manually.",
         );
       }
 
@@ -640,7 +647,7 @@ const FileComplaint: React.FC = () => {
       toast.error(
         error?.response?.data?.message ||
           error?.message ||
-          "Failed to scan documents. Please try again."
+          "Failed to scan documents. Please try again.",
       );
     } finally {
       setScanningDocument(false);
@@ -723,6 +730,7 @@ const FileComplaint: React.FC = () => {
         return "";
 
       case "location":
+        if (!value.trim()) return "Location is required";
         if (value.trim().length > 500)
           return "Location cannot exceed 500 characters";
         return "";
@@ -786,7 +794,10 @@ const FileComplaint: React.FC = () => {
     }
   };
 
-  const validateForm = (): boolean => {
+  const validateForm = (): {
+    valid: boolean;
+    newErrors: Record<string, string>;
+  } => {
     const newErrors: Record<string, string> = {};
 
     // Validate all required fields
@@ -822,7 +833,7 @@ const FileComplaint: React.FC = () => {
 
     const subdistrictError = validateField(
       "subdistrictName",
-      formData.subdistrictName
+      formData.subdistrictName,
     );
     if (subdistrictError) newErrors.subdistrictName = subdistrictError;
 
@@ -848,7 +859,8 @@ const FileComplaint: React.FC = () => {
     }
 
     setErrors(newErrors);
-    return Object.keys(newErrors).length === 0;
+    const valid = Object.keys(newErrors).length === 0;
+    return { valid, newErrors };
   };
 
   const handleFieldChange = (name: string, value: string) => {
@@ -876,155 +888,201 @@ const FileComplaint: React.FC = () => {
     }
   };
 
-  // Helper function to ensure location is set and return updated form data
-  const ensureLocationSet = async (
-    currentData: typeof formData
-  ): Promise<typeof formData | null> => {
-    // Check if location is already set
-    if (
-      currentData.latitude &&
-      currentData.latitude !== 0 &&
-      currentData.longitude &&
-      currentData.longitude !== 0
-    ) {
-      return currentData;
-    }
+  // Request location for submit: clear messaging, and distinguish denied vs error for re-ask
+  type LocationRequestResult =
+    | { ok: true; data: typeof formData }
+    | { ok: false; denied: true }
+    | { ok: false; error: string };
 
-    // Location not set, request it
+  const requestLocationForSubmit = async (
+    currentData: typeof formData,
+  ): Promise<LocationRequestResult> => {
     if (!navigator.geolocation) {
-      toast.error(
-        "Geolocation is not supported. Please use the location button to enter coordinates manually."
-      );
-      return null;
+      return {
+        ok: false,
+        error:
+          "Geolocation is not supported. Please use the location button to set your location.",
+      };
     }
 
-    toast.info("Requesting location access... Please allow location access.");
+    toast.info(
+      "This service requires your location to register your complaint. Please allow location access when prompted.",
+    );
 
-    try {
-      const position = await new Promise<GeolocationPosition>(
-        (resolve, reject) => {
-          navigator.geolocation.getCurrentPosition(resolve, reject, {
-            enableHighAccuracy: true,
-            timeout: 10000,
-            maximumAge: 0,
-          });
-        }
+    return new Promise((resolve) => {
+      navigator.geolocation.getCurrentPosition(
+        async (position) => {
+          try {
+            const locationData = await getLocationWithGeocoding(position);
+            // Only set lat/long from GPS; never overwrite user-entered address fields
+            const updatedData = { ...currentData };
+            updatedData.latitude = locationData.latitude;
+            updatedData.longitude = locationData.longitude;
+            const addressFields = [
+              "location",
+              "city",
+              "locality",
+              "pincode",
+              "districtName",
+              "subdistrictName",
+              "villageName",
+            ] as const;
+            for (const key of addressFields) {
+              const currentVal = currentData[key];
+              const isEmpty =
+                currentVal === undefined ||
+                currentVal === null ||
+                String(currentVal).trim() === "";
+              if (isEmpty && locationData[key]) {
+                updatedData[key] = locationData[key];
+              }
+            }
+            setFormData(updatedData);
+            const userHadLocationFilled =
+              String(currentData.location || "").trim() !== "" &&
+              String(currentData.districtName || "").trim() !== "" &&
+              String(currentData.subdistrictName || "").trim() !== "";
+            if (userHadLocationFilled) {
+              toast.success(
+                "Coordinates added. Submitting with your entered location.",
+              );
+            } else if (
+              !updatedData.districtName?.trim() ||
+              !updatedData.subdistrictName?.trim()
+            ) {
+              toast.warning(
+                "Coordinates added. Please enter district and sub-district if still empty.",
+              );
+            } else {
+              toast.success(
+                "Location coordinates added. You can now submit your complaint.",
+              );
+            }
+            resolve({ ok: true, data: updatedData });
+          } catch (err) {
+            console.error("Geocoding error:", err);
+            resolve({
+              ok: false,
+              error:
+                "Could not resolve address. Please try the location button again.",
+            });
+          }
+        },
+        (error: GeolocationPositionError) => {
+          if (error.code === 1) {
+            // PERMISSION_DENIED
+            resolve({ ok: false, denied: true });
+          } else if (error.code === 3) {
+            resolve({
+              ok: false,
+              error:
+                "Location request timed out. Please try again or use the location button.",
+            });
+          } else {
+            resolve({
+              ok: false,
+              error:
+                error.message || "Unable to get location. Please try again.",
+            });
+          }
+        },
+        { enableHighAccuracy: true, timeout: 15000, maximumAge: 0 },
       );
+    });
+  };
 
-      // Get location with geocoding
-      const locationData = await getLocationWithGeocoding(position);
-
-      // Merge location data with current form data
-      const updatedData = {
-        ...currentData,
-        ...locationData,
-      };
-
-      // Update form data with location
-      setFormData(updatedData);
-
-      // If district or subdistrict are missing, show warning
-      if (!locationData.districtName || !locationData.subdistrictName) {
-        toast.warning(
-          "Location detected, but district/subdistrict could not be auto-filled. Please enter manually."
-        );
-      } else {
-        toast.success("Location detected successfully!");
-      }
-
-      return updatedData;
-    } catch (error: any) {
-      console.error("Location request error:", error);
+  const handleLocationReask = async () => {
+    setDetectingLocation(true);
+    const result = await requestLocationForSubmit(formData);
+    setDetectingLocation(false);
+    if (result.ok) {
+      setShowLocationReaskBanner(false);
+      toast.success("Location captured. You can now submit your complaint.");
+    } else if (result.denied) {
       toast.error(
-        "Location access is required to submit a complaint. Please allow location access or click the location button."
+        "This is a location-based service. Please provide location access to submit your complaint.",
       );
-      return null;
+    } else {
+      toast.error(result.error);
     }
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-
     setSubmitting(true);
+    setShowLocationReaskBanner(false);
 
-    // Ensure location is set before proceeding
-    let finalFormData = await ensureLocationSet(formData);
-    if (!finalFormData) {
+    // 1. Validate form first (do not ask for location until rest of form is valid)
+    const { valid, newErrors } = validateForm();
+    const errorKeys = Object.keys(newErrors);
+    const onlyLocationErrors =
+      errorKeys.length > 0 &&
+      errorKeys.every((k) => k === "latitude" || k === "longitude");
+
+    if (!valid && !onlyLocationErrors) {
+      const firstKey = errorKeys[0];
+      const firstMessage = newErrors[firstKey];
+      const extra =
+        errorKeys.length > 1
+          ? ` (and ${errorKeys.length - 1} more — see fields below)`
+          : "";
+      toast.error(firstMessage + extra);
+      const errorFieldIds: Record<string, string> = {
+        contactName: "name",
+        contactPhone: "phone",
+        contactEmail: "email",
+        title: "title",
+        description: "description",
+        category: "category",
+        subCategory: "subCategory",
+        voterId: "voterId",
+        location: "location",
+        districtName: "districtName",
+        subdistrictName: "subdistrictName",
+        villageName: "villageName",
+        latitude: "location",
+        longitude: "location",
+      };
+      const firstId = errorFieldIds[firstKey];
+      if (firstId) {
+        setTimeout(() => {
+          document.getElementById(firstId)?.scrollIntoView({
+            behavior: "smooth",
+            block: "center",
+          });
+        }, 100);
+      }
       setSubmitting(false);
       return;
     }
+    if (onlyLocationErrors) {
+      setErrors({});
+    }
 
-    // Create a validation function that uses the final data
-    const validateCurrentForm = (data: typeof formData): boolean => {
-      const newErrors: Record<string, string> = {};
+    // 2. Determine final form data: use current if location already set, else request location
+    let finalFormData = formData;
+    const needsLocation =
+      !formData.latitude ||
+      !formData.longitude ||
+      formData.latitude === 0 ||
+      formData.longitude === 0;
 
-      // Validate all required fields
-      const nameError = validateField("contactName", data.contactName);
-      if (nameError) newErrors.contactName = nameError;
-
-      const phoneError = validateField("contactPhone", data.contactPhone);
-      if (phoneError) newErrors.contactPhone = phoneError;
-
-      const emailError = validateField("contactEmail", data.contactEmail);
-      if (emailError) newErrors.contactEmail = emailError;
-
-      const titleError = validateField("title", data.title);
-      if (titleError) newErrors.title = titleError;
-
-      const descriptionError = validateField("description", data.description);
-      if (descriptionError) newErrors.description = descriptionError;
-
-      const categoryError = validateField("category", data.category);
-      if (categoryError) newErrors.category = categoryError;
-
-      const subCategoryError = validateField("subCategory", data.subCategory);
-      if (subCategoryError) newErrors.subCategory = subCategoryError;
-
-      const voterIdError = validateField("voterId", data.voterId);
-      if (voterIdError) newErrors.voterId = voterIdError;
-
-      const locationError = validateField("location", data.location);
-      if (locationError) newErrors.location = locationError;
-
-      const districtError = validateField("districtName", data.districtName);
-      if (districtError) newErrors.districtName = districtError;
-
-      const subdistrictError = validateField(
-        "subdistrictName",
-        data.subdistrictName
-      );
-      if (subdistrictError) newErrors.subdistrictName = subdistrictError;
-
-      const villageError = validateField("villageName", data.villageName);
-      if (villageError) newErrors.villageName = villageError;
-
-      // Validate latitude
-      if (!data.latitude || data.latitude === 0) {
-        newErrors.latitude =
-          "Latitude is required. Please allow location access or click the location button.";
+    if (needsLocation) {
+      const locResult = await requestLocationForSubmit(formData);
+      if (locResult.ok) {
+        finalFormData = locResult.data;
+      } else if (locResult.denied) {
+        toast.error(
+          "This is a location-based service. Please provide location access to submit your complaint.",
+        );
+        setShowLocationReaskBanner(true);
+        setSubmitting(false);
+        return;
       } else {
-        const latError = validateField("latitude", String(data.latitude));
-        if (latError) newErrors.latitude = latError;
+        toast.error(locResult.error);
+        setSubmitting(false);
+        return;
       }
-
-      // Validate longitude
-      if (!data.longitude || data.longitude === 0) {
-        newErrors.longitude =
-          "Longitude is required. Please allow location access or click the location button.";
-      } else {
-        const lngError = validateField("longitude", String(data.longitude));
-        if (lngError) newErrors.longitude = lngError;
-      }
-
-      setErrors(newErrors);
-      return Object.keys(newErrors).length === 0;
-    };
-
-    // Validate all fields
-    if (!validateCurrentForm(finalFormData)) {
-      toast.error("Please fix the errors in the form");
-      setSubmitting(false);
-      return;
     }
 
     try {
@@ -1129,6 +1187,7 @@ const FileComplaint: React.FC = () => {
       villageName: "",
     });
     setErrors({});
+    setShowLocationReaskBanner(false);
     setAttachments([]);
     attachments.forEach((att) => URL.revokeObjectURL(att.preview));
     setAttachments([]);
@@ -1564,7 +1623,7 @@ const FileComplaint: React.FC = () => {
                           className="text-sm font-semibold text-gray-700 flex items-center gap-1.5"
                         >
                           <MapPinIcon className="w-3.5 h-3.5 text-gray-600" />
-                          Location
+                          Location <span className="text-red-500">*</span>
                         </Label>
                         <div className="flex gap-2">
                           <Input
@@ -1576,7 +1635,8 @@ const FileComplaint: React.FC = () => {
                             onBlur={(e) =>
                               handleBlur("location", e.target.value)
                             }
-                            placeholder="Enter location or auto-detect (max 500 characters)"
+                            placeholder="Enter complaint location or use map icon to auto-detect (max 500 characters)"
+                            required
                             className={`bg-gray-50 flex-1 h-10 ${
                               errors.location
                                 ? "border-red-500 focus:border-red-500 focus:ring-red-500"
@@ -1843,6 +1903,7 @@ const FileComplaint: React.FC = () => {
                           required
                         >
                           <SelectTrigger
+                            id="category"
                             className={`bg-gray-50 h-10 ${
                               errors.category
                                 ? "border-red-500 focus:border-red-500 focus:ring-red-500"
@@ -1936,8 +1997,8 @@ const FileComplaint: React.FC = () => {
                             formData.description.length < 20
                               ? "text-yellow-600"
                               : formData.description.length > 5000
-                              ? "text-red-500"
-                              : "text-gray-500"
+                                ? "text-red-500"
+                                : "text-gray-500"
                           }`}
                         >
                           {formData.description.length}/5000 characters (minimum
@@ -2053,6 +2114,56 @@ const FileComplaint: React.FC = () => {
                       )}
                     </div>
                   </div>
+
+                  {/* Location reask banner when user denied access */}
+                  {showLocationReaskBanner && (
+                    <div className="rounded-lg border-2 border-amber-300 bg-amber-50 p-4 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+                      <div className="flex items-start gap-3">
+                        <div className="p-1.5 bg-amber-200 rounded-full shrink-0 mt-0.5">
+                          <MapPin className="w-4 h-4 text-amber-800" />
+                        </div>
+                        <div>
+                          <p className="text-sm font-semibold text-amber-900">
+                            Location access required
+                          </p>
+                          <p className="text-sm text-amber-800 mt-0.5">
+                            This is a location-based service. Please provide
+                            location access to submit your complaint.
+                          </p>
+                        </div>
+                      </div>
+                      <div className="flex gap-2 shrink-0">
+                        <Button
+                          type="button"
+                          variant="outline"
+                          size="sm"
+                          onClick={() => setShowLocationReaskBanner(false)}
+                          className="border-amber-400 text-amber-800 hover:bg-amber-100"
+                        >
+                          Dismiss
+                        </Button>
+                        <Button
+                          type="button"
+                          size="sm"
+                          onClick={handleLocationReask}
+                          disabled={detectingLocation}
+                          className="bg-amber-600 hover:bg-amber-700 text-white"
+                        >
+                          {detectingLocation ? (
+                            <>
+                              <Loader2 className="w-3.5 h-3.5 mr-1.5 animate-spin" />
+                              Requesting...
+                            </>
+                          ) : (
+                            <>
+                              <MapPin className="w-3.5 h-3.5 mr-1.5" />
+                              Allow location
+                            </>
+                          )}
+                        </Button>
+                      </div>
+                    </div>
+                  )}
 
                   {/* Submit Buttons */}
                   <div className="flex gap-3 pt-4 border-t border-gray-200">

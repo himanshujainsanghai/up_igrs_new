@@ -306,26 +306,33 @@ export interface ComplaintFilters {
   search?: string;
 }
 
-// Meeting Types
+// Meeting Types (aligned with backend API response - snake_case)
 export interface Meeting {
   _id: string;
-  complaintId: string;
-  requestedBy: string;
-  requestedByUser?: {
-    _id: string;
-    name: string;
-    email: string;
-  };
-  requestedDate: string;
-  requestedTime: string;
-  reason: string;
+  id: string;
+  requester_name: string;
+  requester_email: string;
+  requester_phone?: string;
+  requester_area?: string;
+  meeting_subject: string;
+  purpose: string;
+  meeting_type:
+    | "general_inquiry"
+    | "complaint_followup"
+    | "suggestion"
+    | "other";
+  preferred_date?: string;
+  preferred_time?: string;
+  actual_meeting_date?: string;
   status: "pending" | "approved" | "rejected" | "completed";
-  scheduledDate?: string;
-  scheduledTime?: string;
-  location?: string;
-  notes?: string;
-  createdAt: string;
-  updatedAt: string;
+  assigned_staff?: string;
+  meeting_location?: string;
+  meeting_notes?: string;
+  admin_notes?: string;
+  attachment_urls?: string[];
+  attachment_names?: string[];
+  created_at: string;
+  updated_at: string;
 }
 
 export interface MeetingRequest {
@@ -384,6 +391,16 @@ export interface AIAnalysisRequest {
 export interface AIAnalysisResponse {
   summary: string;
   steps: Omit<AIResolutionStep, "_id" | "resolutionId">[];
+}
+
+export interface DocumentSummaryRecord {
+  id: string;
+  complaint_id: string;
+  summary: string;
+  use_complaint_context: boolean;
+  document_count: number;
+  user_prompt?: string;
+  created_at: string;
 }
 
 // Upload Types

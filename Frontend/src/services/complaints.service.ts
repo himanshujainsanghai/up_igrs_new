@@ -106,7 +106,7 @@ export const complaintsService = {
    * GET /api/v1/complaints?page=1&limit=20&status=pending&category=roads&search=keyword
    */
   async getComplaints(
-    filters: ComplaintFilters = {}
+    filters: ComplaintFilters = {},
   ): Promise<PaginatedResponse<Complaint>> {
     const params = new URLSearchParams();
 
@@ -135,9 +135,10 @@ export const complaintsService = {
    * Returns all complaints for Badaun district (both "Badaun" and "Budaun" spellings)
    */
   async getBadaunComplaints(): Promise<Complaint[]> {
-    const response = await apiClient.get<
-      ApiResponse<{ count: number; complaints: Complaint[] }>
-    >("/complaints/badaun");
+    const response =
+      await apiClient.get<
+        ApiResponse<{ count: number; complaints: Complaint[] }>
+      >("/complaints/badaun");
 
     if (response.success && response.data) {
       return response.data.complaints || [];
@@ -171,7 +172,7 @@ export const complaintsService = {
     officerAttachments: OfficerAttachment[];
   }> {
     const response = await apiClient.get<ApiResponse<any>>(
-      `/complaints/officer/complaint/${id}`
+      `/complaints/officer/complaint/${id}`,
     );
     if (response.success && response.data) {
       const data = response.data;
@@ -199,7 +200,7 @@ export const complaintsService = {
             fileSize: doc.file_size,
             uploadedBy: doc.uploaded_by,
             createdAt: doc.created_at,
-          })
+          }),
         ),
       };
     }
@@ -248,7 +249,7 @@ export const complaintsService = {
 
     const response = await apiClient.post<ApiResponse<Complaint>>(
       "/complaints",
-      backendData
+      backendData,
     );
     return response.data;
   },
@@ -259,11 +260,11 @@ export const complaintsService = {
    */
   async updateComplaint(
     id: string,
-    updates: Partial<Complaint>
+    updates: Partial<Complaint>,
   ): Promise<Complaint> {
     const response = await apiClient.put<ApiResponse<Complaint>>(
       `/complaints/${id}`,
-      updates
+      updates,
     );
     return response.data;
   },
@@ -291,7 +292,7 @@ export const complaintsService = {
       `/complaints/${id}/notes`,
       {
         note: content.trim(), // Backend expects 'note' field, not 'content'
-      }
+      },
     );
     if (response.success && response.data) {
       // Transform backend snake_case to frontend camelCase
@@ -314,7 +315,7 @@ export const complaintsService = {
    */
   async getNotes(id: string): Promise<ComplaintNote[]> {
     const response = await apiClient.get<ApiResponse<any[]>>(
-      `/complaints/${id}/notes`
+      `/complaints/${id}/notes`,
     );
     if (response.success && response.data) {
       // Transform backend snake_case to frontend camelCase
@@ -341,7 +342,7 @@ export const complaintsService = {
       fileUrl: string;
       fileType: string;
       fileSize: number;
-    }
+    },
   ): Promise<ComplaintDocument> {
     // Validate required fields
     if (!document.fileUrl || !document.fileName || !document.fileType) {
@@ -362,7 +363,7 @@ export const complaintsService = {
 
     const response = await apiClient.post<ApiResponse<any>>(
       `/complaints/${id}/documents`,
-      backendData
+      backendData,
     );
     if (response.success && response.data) {
       // Transform backend snake_case to frontend camelCase
@@ -388,7 +389,7 @@ export const complaintsService = {
    */
   async getDocuments(id: string): Promise<ComplaintDocument[]> {
     const response = await apiClient.get<ApiResponse<any[]>>(
-      `/complaints/${id}/documents`
+      `/complaints/${id}/documents`,
     );
     if (response.success && response.data) {
       // Transform backend snake_case to frontend camelCase
@@ -458,7 +459,7 @@ export const complaintsService = {
    */
   async getStatistics(): Promise<ComplaintStatistics> {
     const response = await apiClient.get<ApiResponse<ComplaintStatistics>>(
-      "/complaints/statistics"
+      "/complaints/statistics",
     );
     return response.data;
   },
@@ -484,7 +485,7 @@ export const complaintsService = {
         note: input.note.trim(),
         type: input.type,
         attachments: input.attachments,
-      }
+      },
     );
 
     if (response.success && response.data) {
@@ -508,7 +509,7 @@ export const complaintsService = {
    */
   async getOfficerNotes(complaintId: string): Promise<OfficerNote[]> {
     const response = await apiClient.get<ApiResponse<any[]>>(
-      `/complaints/${complaintId}/officer-notes`
+      `/complaints/${complaintId}/officer-notes`,
     );
 
     if (response.success && response.data) {
@@ -550,7 +551,7 @@ export const complaintsService = {
         file_name: input.fileName,
         file_type: input.fileType,
         note_id: input.noteId,
-      }
+      },
     );
 
     if (response.success && response.data) {
@@ -576,10 +577,10 @@ export const complaintsService = {
    * GET /api/v1/complaints/:id/officer-attachments
    */
   async getOfficerAttachments(
-    complaintId: string
+    complaintId: string,
   ): Promise<OfficerAttachment[]> {
     const response = await apiClient.get<ApiResponse<any[]>>(
-      `/complaints/${complaintId}/officer-attachments`
+      `/complaints/${complaintId}/officer-attachments`,
     );
 
     if (response.success && response.data) {
@@ -605,14 +606,14 @@ export const complaintsService = {
    */
   async requestExtension(
     complaintId: string,
-    input: { days: number; reason?: string }
+    input: { days: number; reason?: string },
   ): Promise<ComplaintExtensionRequest> {
     const response = await apiClient.post<ApiResponse<any>>(
       `/complaints/${complaintId}/officer/extension`,
       {
         days: input.days,
         reason: input.reason,
-      }
+      },
     );
     if (response.success && response.data) {
       const req = response.data;
@@ -649,11 +650,11 @@ export const complaintsService = {
         fileType?: string;
       }>;
       closingProof?: string;
-    }
+    },
   ): Promise<Complaint> {
     const response = await apiClient.post<ApiResponse<Complaint>>(
       `/complaints/${complaintId}/officer/close`,
-      input
+      input,
     );
     return response.data;
   },
@@ -672,7 +673,7 @@ export const complaintsService = {
    */
   async approveExtension(
     complaintId: string,
-    input: { days?: number; notes?: string }
+    input: { days?: number; notes?: string },
   ): Promise<{
     timeBoundary: number;
     extension: ComplaintExtensionRequest;
@@ -686,7 +687,7 @@ export const complaintsService = {
       {
         days: input.days,
         notes: input.notes,
-      }
+      },
     );
 
     if (response.success && response.data) {
@@ -734,13 +735,13 @@ export const complaintsService = {
    */
   async updateComplaintResearch(
     id: string,
-    researchData: any
+    researchData: any,
   ): Promise<Complaint> {
     const response = await apiClient.put<ApiResponse<Complaint>>(
       `/complaints/${id}/research`,
       {
         research_data: researchData,
-      }
+      },
     );
     return response.data;
   },
@@ -755,12 +756,13 @@ export const complaintsService = {
       primary_officer?: any;
       secondary_officer?: any;
       drafted_letter?: any;
+      selected_officer?: any;
       stage1_additional_docs?: string[];
-    }
+    },
   ): Promise<Complaint> {
     const response = await apiClient.put<ApiResponse<Complaint>>(
       `/complaints/${id}/stage1`,
-      stage1Data
+      stage1Data,
     );
     return response.data;
   },
@@ -770,7 +772,7 @@ export const complaintsService = {
    * GET /api/v1/complaints/my-complaints
    */
   async getMyComplaints(
-    filters: ComplaintFilters = {}
+    filters: ComplaintFilters = {},
   ): Promise<PaginatedResponse<Complaint>> {
     const params = new URLSearchParams();
 
@@ -799,7 +801,7 @@ export const complaintsService = {
    */
   async getExecutives(): Promise<any[]> {
     const response = await apiClient.get<ApiResponse<any[]>>(
-      "/complaints/executives"
+      "/complaints/executives",
     );
 
     if (response.success && response.data) {
@@ -814,7 +816,7 @@ export const complaintsService = {
    */
   async sendComplaintEmail(
     id: string,
-    recipientEmail?: string
+    recipientEmail?: string,
   ): Promise<{
     success: boolean;
     messageId: string;
@@ -844,7 +846,7 @@ export const complaintsService = {
    */
   async getEmailHistory(id: string): Promise<any[]> {
     const response = await apiClient.get<ApiResponse<any[]>>(
-      `/complaints/${id}/email-history`
+      `/complaints/${id}/email-history`,
     );
 
     if (response.success && response.data) {
@@ -859,7 +861,7 @@ export const complaintsService = {
    */
   async assignOfficer(
     id: string,
-    executive: any
+    executive: any,
   ): Promise<{
     complaint: Complaint;
     officer: any;
@@ -892,13 +894,50 @@ export const complaintsService = {
   },
 
   /**
+   * Unassign complaint from officer (solo route).
+   * PUT /api/v1/complaints/unassign
+   * Body: { complaintId: string }
+   */
+  async unassignComplaint(complaintId: string): Promise<Complaint> {
+    const response = await apiClient.put<ApiResponse<Complaint>>(
+      "/complaints/unassign",
+      { complaintId },
+    );
+    if (response.success && response.data) {
+      return mapComplaint(response.data);
+    }
+    throw new Error(response.error?.message || "Failed to unassign");
+  },
+
+  /**
+   * Reassign complaint to another officer by Officer Mongo _id.
+   * PUT /api/v1/complaints/:id/reassign-officer
+   * Body: { officerId: string }
+   */
+  async reassignOfficer(
+    id: string,
+    officerId: string,
+  ): Promise<{ complaint: Complaint; officer: any }> {
+    const response = await apiClient.put<
+      ApiResponse<{ complaint: Complaint; officer: any }>
+    >(`/complaints/${id}/reassign-officer`, { officerId });
+    if (response.success && response.data) {
+      return {
+        ...response.data,
+        complaint: mapComplaint(response.data.complaint),
+      };
+    }
+    throw new Error(response.error?.message || "Failed to reassign officer");
+  },
+
+  /**
    * Unified: Assign complaint to officer and send email with drafted letter
    * POST /api/v1/complaints/:id/assign-and-send-email
    * If new officer account is created, includes email and password in the email
    */
   async assignOfficerAndSendEmail(
     id: string,
-    executive: any
+    executive: any,
   ): Promise<{
     assignment: {
       complaint: Complaint;
@@ -948,7 +987,7 @@ export const complaintsService = {
       return response.data;
     }
     throw new Error(
-      response.error?.message || "Failed to assign officer and send email"
+      response.error?.message || "Failed to assign officer and send email",
     );
   },
 };

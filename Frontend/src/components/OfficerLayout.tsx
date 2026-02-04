@@ -13,6 +13,7 @@ import {
   Menu,
   User,
   Home,
+  Bell,
   ChevronLeft,
   ChevronRight,
   X,
@@ -58,6 +59,11 @@ const OfficerLayout: React.FC<OfficerLayoutProps> = ({ children }) => {
       label: "My Complaints",
     },
     {
+      path: "/officer/notifications",
+      icon: Bell,
+      label: "Notifications",
+    },
+    {
       path: "/officer/settings",
       icon: Settings,
       label: "Settings",
@@ -79,42 +85,24 @@ const OfficerLayout: React.FC<OfficerLayoutProps> = ({ children }) => {
           <SidebarHeader>
             <div className="flex items-center justify-between">
               {!sidebarCollapsed && (
-                <div className="flex items-center gap-2 flex-1">
-                  <div className="w-8 h-8 bg-primary rounded-lg flex items-center justify-center">
-                    <Home className="w-5 h-5 text-primary-foreground" />
-                  </div>
-                  <h1 className="text-xl font-bold gradient-orange-text">
+                <div className="flex items-center gap-3 flex-1">
+                  <Home className="w-5 h-5 text-sidebar-foreground" />
+                  <h1 className="text-xl font-semibold text-sidebar-foreground">
                     Officer Panel
                   </h1>
                 </div>
               )}
               {sidebarCollapsed && (
                 <div className="w-full flex items-center justify-center">
-                  <div className="w-8 h-8 bg-primary rounded-lg flex items-center justify-center">
-                    <Home className="w-5 h-5 text-primary-foreground" />
-                  </div>
+                  <Home className="w-5 h-5 text-sidebar-foreground" />
                 </div>
               )}
+              {/* Removed duplicate sidebar toggle buttons - keeping only header toggle */}
               <div className="flex items-center gap-1">
                 <Button
                   variant="ghost"
                   size="icon"
-                  className="h-8 w-8 hover:bg-sidebar-accent"
-                  onClick={() => setSidebarCollapsed(!sidebarCollapsed)}
-                  title={
-                    sidebarCollapsed ? "Expand sidebar" : "Collapse sidebar"
-                  }
-                >
-                  {sidebarCollapsed ? (
-                    <ChevronRight className="w-4 h-4" />
-                  ) : (
-                    <ChevronLeft className="w-4 h-4" />
-                  )}
-                </Button>
-                <Button
-                  variant="ghost"
-                  size="icon"
-                  className="md:hidden h-8 w-8"
+                  className="md:hidden h-8 w-8 hover:bg-sidebar-accent"
                   onClick={() => setSidebarOpen(false)}
                 >
                   <X className="w-5 h-5" />
@@ -134,16 +122,14 @@ const OfficerLayout: React.FC<OfficerLayoutProps> = ({ children }) => {
                       active={isItemActive}
                       icon={
                         sidebarCollapsed ? (
-                          <div
+                          <Icon
                             className={cn(
-                              "w-8 h-8 rounded-full flex items-center justify-center transition-colors",
+                              "w-5 h-5 transition-colors",
                               isItemActive
-                                ? "bg-primary text-primary-foreground"
-                                : "bg-sidebar-accent/50 text-sidebar-foreground hover:bg-sidebar-accent"
+                                ? "text-primary"
+                                : "text-sidebar-foreground"
                             )}
-                          >
-                            <Icon className="w-5 h-5" />
-                          </div>
+                          />
                         ) : (
                           <Icon className="w-5 h-5" />
                         )
@@ -167,10 +153,8 @@ const OfficerLayout: React.FC<OfficerLayoutProps> = ({ children }) => {
             <div className="space-y-2">
               {!sidebarCollapsed ? (
                 <>
-                  <div className="flex items-center gap-3 px-3 py-2 rounded-md bg-sidebar-accent">
-                    <div className="w-8 h-8 bg-primary rounded-full flex items-center justify-center flex-shrink-0">
-                      <User className="w-4 h-4 text-primary-foreground" />
-                    </div>
+                  <div className="flex items-center gap-3 px-3 py-2 rounded-md">
+                    <User className="w-5 h-5 text-sidebar-foreground flex-shrink-0" />
                     <div className="flex-1 min-w-0">
                       <p className="text-sm font-medium text-sidebar-foreground truncate">
                         {user?.name || "Officer"}
@@ -182,7 +166,7 @@ const OfficerLayout: React.FC<OfficerLayoutProps> = ({ children }) => {
                   </div>
                   <Button
                     variant="ghost"
-                    className="w-full justify-start text-sidebar-foreground hover:bg-sidebar-accent"
+                    className="w-full justify-start text-sidebar-foreground hover:bg-sidebar-accent hover:text-sidebar-foreground transition-colors"
                     onClick={handleLogout}
                   >
                     <LogOut className="w-4 h-4 mr-2" />
@@ -192,15 +176,13 @@ const OfficerLayout: React.FC<OfficerLayoutProps> = ({ children }) => {
               ) : (
                 <>
                   <div className="flex items-center justify-center py-2">
-                    <div className="w-8 h-8 bg-primary rounded-full flex items-center justify-center">
-                      <User className="w-4 h-4 text-primary-foreground" />
-                    </div>
+                    <User className="w-5 h-5 text-sidebar-foreground" />
                   </div>
                   <div className="flex items-center justify-center">
                     <button
                       onClick={handleLogout}
                       title="Logout"
-                      className="w-8 h-8 rounded-lg flex items-center justify-center bg-sidebar-accent/50 text-sidebar-foreground hover:bg-sidebar-accent transition-colors"
+                      className="w-8 h-8 rounded-lg flex items-center justify-center text-sidebar-foreground hover:bg-sidebar-accent hover:text-sidebar-foreground transition-colors"
                     >
                       <LogOut className="w-4 h-4" />
                     </button>
@@ -255,4 +237,3 @@ const OfficerLayout: React.FC<OfficerLayoutProps> = ({ children }) => {
 };
 
 export default OfficerLayout;
-

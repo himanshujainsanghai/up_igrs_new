@@ -65,6 +65,19 @@ router.post(
   aiController.generateComplaintActions
 ); // Generate actions
 
+router.get(
+  "/complaints/:id/summarize-documents",
+  authenticate,
+  authorize("admin"),
+  aiController.listDocumentSummaries
+); // List document summary history for complaint (newest first)
+router.post(
+  "/complaints/:id/summarize-documents",
+  authenticate,
+  authorize("admin"),
+  aiController.summarizeDocuments
+); // Summarize complaint attachments (documents); body: { useComplaintContext?: boolean }
+
 // Step instructions routes (must be before /complaints/:id routes to avoid conflicts)
 router.post(
   "/steps/:stepId/instructions",

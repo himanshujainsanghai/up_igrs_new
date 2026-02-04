@@ -8,6 +8,7 @@ import { ComplaintExtensionRequest } from "../models/ComplaintExtensionRequest";
 import { AIStepExecutionInstruction } from "../models/AIStepExecutionInstruction";
 import { NotFoundError, ValidationError } from "../utils/errors";
 import logger from "../config/logger";
+import * as complaintTimeline from "./complaintTimeline.service";
 import { emailService } from "../modules/email";
 import { env } from "../config/env";
 import { User } from "../models/User";
@@ -308,6 +309,20 @@ export const createComplaint = async (data: CreateComplaintDto) => {
       `Complaint saved successfully: ${complaint.id}, complaint_id: ${complaint.complaint_id}`
     );
 
+    try {
+      await complaintTimeline.appendComplaintCreated(
+        complaint.id,
+        {
+          title: complaint.title,
+          category: complaint.category,
+          created_by: data.created_by_admin ? "admin" : undefined,
+        },
+        data.created_by_admin ? { role: "admin" as const } : { role: "citizen" as const }
+      );
+    } catch (err) {
+      logger.warn("Timeline appendComplaintCreated failed:", err);
+    }
+
     const complaintObj = complaint.toObject();
     logger.info("Complaint object to return:", {
       id: complaintObj.id,
@@ -336,6 +351,8 @@ export const updateComplaint = async (id: string, data: UpdateComplaintDto) => {
     throw new NotFoundError("Complaint");
   }
 
+  const oldStatus = complaint.status;
+  const oldPriority = complaint.priority;
   // Update fields
   Object.assign(complaint, data);
 
@@ -346,6 +363,32 @@ export const updateComplaint = async (id: string, data: UpdateComplaintDto) => {
 
   await complaint.save({ validateModifiedOnly: true });
   logger.info(`Complaint updated: ${id}`);
+
+  try {
+    if (data.status !== undefined && data.status !== oldStatus) {
+      await complaintTimeline.appendStatusChanged(id, {
+        old_status: oldStatus,
+        new_status: data.status,
+      });
+    }
+    if (data.priority !== undefined && data.priority !== oldPriority) {
+      await complaintTimeline.appendPriorityChanged(id, {
+        old_priority: oldPriority,
+        new_priority: data.priority,
+      });
+    }
+    if (
+      (data.status === undefined || data.status === oldStatus) &&
+      (data.priority === undefined || data.priority === oldPriority)
+    ) {
+      await complaintTimeline.appendComplaintUpdated(id, {
+        field: Object.keys(data).join(","),
+        new_value: data,
+      });
+    }
+  } catch (err) {
+    logger.warn("Timeline append after updateComplaint failed:", err);
+  }
 
   return complaint.toObject();
 };
@@ -392,6 +435,20 @@ export const addComplaintNote = async (
   });
 
   await complaintNote.save();
+
+  try {
+    await complaintTimeline.appendNoteAdded(
+      complaintId,
+      {
+        note_id: complaintNote.id,
+        excerpt: note.length > 100 ? note.slice(0, 100) + "…" : note,
+      },
+      createdBy ? { name: createdBy } : undefined
+    );
+  } catch (err) {
+    logger.warn("Timeline appendNoteAdded failed:", err);
+  }
+
   return complaintNote.toObject();
 };
 
@@ -431,6 +488,21 @@ export const addComplaintDocument = async (
   });
 
   await document.save();
+
+  try {
+    await complaintTimeline.appendDocumentAdded(
+      complaintId,
+      {
+        document_id: document.id,
+        file_name: fileName,
+        file_type: fileType,
+      },
+      uploadedBy ? { name: uploadedBy } : undefined
+    );
+  } catch (err) {
+    logger.warn("Timeline appendDocumentAdded failed:", err);
+  }
+
   return document.toObject();
 };
 
@@ -485,6 +557,22 @@ export const addOfficerNote = async (
   });
 
   await officerNote.save();
+
+  try {
+    await complaintTimeline.appendOfficerNoteAdded(
+      complaintId,
+      {
+        note_id: officerNote.id,
+        officer_id: officerId,
+        type,
+        excerpt: note.length > 100 ? note.slice(0, 100) + "…" : note,
+      },
+      { user_id: officerId, role: "officer" }
+    );
+  } catch (err) {
+    logger.warn("Timeline appendOfficerNoteAdded failed:", err);
+  }
+
   return officerNote.toObject();
 };
 
@@ -557,6 +645,22 @@ export const addOfficerAttachment = async (
   });
 
   await attachment.save();
+
+  try {
+    await complaintTimeline.appendOfficerDocumentAdded(
+      complaintId,
+      {
+        attachment_id: attachment.id,
+        officer_id: officerId,
+        file_name: fileName,
+        attachment_type: attachmentType,
+      },
+      { user_id: officerId, role: "officer" }
+    );
+  } catch (err) {
+    logger.warn("Timeline appendOfficerDocumentAdded failed:", err);
+  }
+
   return attachment.toObject();
 };
 
@@ -709,6 +813,26 @@ export const closeComplaint = async (
   complaint.updated_at = now;
 
   await complaint.save();
+
+  try {
+    await complaintTimeline.appendComplaintClosed(
+      complaintId,
+      {
+        closed_by_user_id: officerId,
+        closed_by_name: closedByOfficer.name,
+        closed_by_email: closedByOfficer.email,
+        remarks_excerpt:
+          input.remarks.trim().length > 200
+            ? input.remarks.trim().slice(0, 200) + "…"
+            : input.remarks.trim(),
+        closed_at: now.toISOString(),
+      },
+      { user_id: officerId, role: "officer", name: closedByOfficer.name }
+    );
+  } catch (err) {
+    logger.warn("Timeline appendComplaintClosed failed:", err);
+  }
+
   return complaint.toObject();
 };
 
@@ -747,6 +871,23 @@ export const requestOfficerExtension = async (
   });
 
   await request.save();
+
+  try {
+    await complaintTimeline.appendExtensionRequested(
+      complaintId,
+      {
+        request_id: request.id,
+        requested_by: officerId,
+        requested_by_role: "officer",
+        days_requested: days,
+        reason,
+      },
+      { user_id: officerId, role: "officer" }
+    );
+  } catch (err) {
+    logger.warn("Timeline appendExtensionRequested failed:", err);
+  }
+
   return request.toObject();
 };
 
@@ -812,6 +953,20 @@ export const approveExtension = async (
 
     // Commit transaction
     await session.commitTransaction();
+
+    try {
+      await complaintTimeline.appendExtensionApproved(
+        complaintId,
+        {
+          request_id: pendingRequest.id,
+          new_deadline_days: extensionDays,
+          decided_by: adminId,
+        },
+        { user_id: adminId, role: "admin" }
+      );
+    } catch (err) {
+      logger.warn("Timeline appendExtensionApproved failed:", err);
+    }
 
     logger.info(
       `Extension request ${pendingRequest.id} approved by admin ${adminId} for complaint ${complaintId}. Extended by ${extensionDays} days.`
@@ -974,6 +1129,16 @@ export const updateComplaintResearch = async (
   complaint.updated_at = new Date();
   await complaint.save({ validateModifiedOnly: true });
 
+  try {
+    await complaintTimeline.appendResearchCompleted(
+      complaintId,
+      { updated: true },
+      undefined
+    );
+  } catch (err) {
+    logger.warn("Timeline appendResearchCompleted failed:", err);
+  }
+
   logger.info(`Research data updated for complaint: ${complaintId}`);
   return complaint.toObject();
 };
@@ -1024,6 +1189,10 @@ export const updateComplaintStage1Data = async (
     throw new NotFoundError("Complaint");
   }
 
+  const previousSelectedOfficer = complaint.selected_officer
+    ? { ...complaint.selected_officer }
+    : undefined;
+
   // Update only provided fields (partial update)
   if (stage1Data.primary_officer !== undefined) {
     complaint.primary_officer = stage1Data.primary_officer;
@@ -1043,6 +1212,36 @@ export const updateComplaintStage1Data = async (
 
   complaint.updated_at = new Date();
   await complaint.save({ validateModifiedOnly: true });
+
+  try {
+    if (stage1Data.drafted_letter !== undefined) {
+      await complaintTimeline.appendLetterSaved(
+        complaintId,
+        {
+          to_name: stage1Data.drafted_letter?.to,
+          to_designation: complaint.selected_officer?.designation,
+        },
+        undefined
+      );
+    }
+    if (
+      stage1Data.selected_officer !== undefined &&
+      previousSelectedOfficer &&
+      previousSelectedOfficer.email !== stage1Data.selected_officer?.email
+    ) {
+      await complaintTimeline.appendRecipientUpdated(
+        complaintId,
+        {
+          previous_officer_name: previousSelectedOfficer.name,
+          new_officer_name: stage1Data.selected_officer?.name,
+          new_officer_email: stage1Data.selected_officer?.email,
+        },
+        undefined
+      );
+    }
+  } catch (err) {
+    logger.warn("Timeline append after updateComplaintStage1Data failed:", err);
+  }
 
   logger.info(`Stage1 data updated for complaint: ${complaintId}`);
   return complaint.toObject();
@@ -1277,6 +1476,31 @@ export const getComplaintEmailHistory = async (
 };
 
 /**
+ * Remove complaint from an officer's assignedComplaints (single source of truth).
+ * Handles legacy data: officer may have no assignedComplaints or complaint may not be in array.
+ * @param complaintMongoId - Complaint's _id (ObjectId)
+ * @param officerId - Officer's _id (string)
+ */
+async function removeComplaintFromOfficer(
+  complaintMongoId: mongoose.Types.ObjectId,
+  officerId: string
+): Promise<void> {
+  if (!mongoose.Types.ObjectId.isValid(officerId)) return;
+  const officer = await Officer.findById(officerId);
+  if (!officer) return;
+  const list = officer.assignedComplaints;
+  if (!list || !Array.isArray(list)) return;
+  const before = list.length;
+  officer.assignedComplaints = list.filter(
+    (id) => id && id.toString() !== complaintMongoId.toString()
+  );
+  if (officer.assignedComplaints.length < before) {
+    await officer.save();
+    logger.debug(`Removed complaint ${complaintMongoId} from officer ${officerId} (complaint moved/reassigned)`);
+  }
+}
+
+/**
  * Assign complaint to a new officer (creates User and Officer records)
  * Service function for internal use
  */
@@ -1438,7 +1662,15 @@ export const assignNewOfficerService = async (
     });
   }
 
-  // Add complaint to officer's assigned complaints
+  const previousAssignedUserId = complaint.assigned_to_user_id;
+  const previousOfficerId = complaint.assignedOfficer?.toString();
+
+  // Single source of truth: remove complaint from previous officer's list (if any)
+  if (previousOfficerId) {
+    await removeComplaintFromOfficer(complaint._id, previousOfficerId);
+  }
+
+  // Add complaint to new officer's assigned complaints
   if (!officer.assignedComplaints) {
     officer.assignedComplaints = [];
   }
@@ -1461,6 +1693,37 @@ export const assignNewOfficerService = async (
   complaint.timeBoundary = 7; // 1 week default
   complaint.status = "in_progress";
   await complaint.save();
+
+  try {
+    if (previousAssignedUserId && previousOfficerId) {
+      await complaintTimeline.appendOfficerReassigned(
+        complaintId,
+        {
+          previous_officer_id: previousOfficerId,
+          new_officer_id: officer._id.toString(),
+          new_officer_name: executive.name,
+          new_officer_email: executive.email,
+          new_time_deadline_days: 7,
+        },
+        undefined
+      );
+    } else {
+      await complaintTimeline.appendOfficerAssigned(
+        complaintId,
+        {
+          assigned_to_user_id: newUser.id,
+          officer_id: officer._id.toString(),
+          officer_name: executive.name,
+          officer_email: executive.email,
+          time_deadline_days: 7,
+          is_new_officer: true,
+        },
+        undefined
+      );
+    }
+  } catch (err) {
+    logger.warn("Timeline append officer assign failed:", err);
+  }
 
   logger.info(
     `Complaint ${complaintId} assigned to new officer ${executive.name} (${executive.email})`
@@ -1518,7 +1781,15 @@ export const assignExistingOfficerService = async (
     throw new ValidationError("Complaint is already assigned to this officer");
   }
 
-  // Add complaint to officer's assigned complaints if not already present
+  const previousAssignedUserId = complaint.assigned_to_user_id;
+  const previousOfficerId = complaint.assignedOfficer?.toString();
+
+  // Single source of truth: remove complaint from previous officer's list (if any)
+  if (previousOfficerId) {
+    await removeComplaintFromOfficer(complaint._id, previousOfficerId);
+  }
+
+  // Add complaint to new officer's assigned complaints if not already present
   if (!officer.assignedComplaints) {
     officer.assignedComplaints = [];
   }
@@ -1537,6 +1808,50 @@ export const assignExistingOfficerService = async (
   complaint.timeBoundary = 7; // 1 week default
   complaint.status = "in_progress";
   await complaint.save();
+
+  try {
+    if (previousAssignedUserId && previousOfficerId) {
+      let previousOfficerName: string | undefined;
+      let previousOfficerEmail: string | undefined;
+      try {
+        const prevOfficer = await Officer.findById(previousOfficerId).lean();
+        if (prevOfficer) {
+          previousOfficerName = prevOfficer.name;
+          previousOfficerEmail = prevOfficer.email;
+        }
+      } catch (_) {
+        // ignore
+      }
+      await complaintTimeline.appendOfficerReassigned(
+        complaintId,
+        {
+          previous_officer_id: previousOfficerId,
+          previous_officer_name: previousOfficerName,
+          previous_officer_email: previousOfficerEmail,
+          new_officer_id: officer._id.toString(),
+          new_officer_name: officer.name,
+          new_officer_email: officer.email,
+          new_time_deadline_days: 7,
+        },
+        undefined
+      );
+    } else {
+      await complaintTimeline.appendOfficerAssigned(
+        complaintId,
+        {
+          assigned_to_user_id: user.id,
+          officer_id: officer._id.toString(),
+          officer_name: officer.name,
+          officer_email: officer.email,
+          time_deadline_days: 7,
+          is_new_officer: false,
+        },
+        undefined
+      );
+    }
+  } catch (err) {
+    logger.warn("Timeline append officer assign failed:", err);
+  }
 
   logger.info(
     `Complaint ${complaintId} assigned to existing officer ${officer.name} (${officer.email})`
@@ -1605,4 +1920,176 @@ export const assignOfficer = async (
     );
     return await assignNewOfficerService(complaintId, executive);
   }
+};
+
+/**
+ * Reassign complaint to a different officer (admin only).
+ * Single source of truth: updates Complaint.assignedOfficer and both officers' assignedComplaints.
+ * Appends officer_reassigned to timeline (works even if no prior timeline event exists for this complaint).
+ */
+export const reassignOfficer = async (
+  complaintId: string,
+  newOfficerId: string,
+  adminId?: string
+): Promise<{ complaint: any; officer: any }> => {
+  const complaint = await Complaint.findOne({ id: complaintId });
+  if (!complaint) {
+    throw new NotFoundError("Complaint not found");
+  }
+
+  if (!complaint.assignedOfficer || !complaint.isOfficerAssigned) {
+    throw new ValidationError(
+      "Complaint is not assigned to any officer. Use assign-officer to assign."
+    );
+  }
+
+  const previousOfficerId = complaint.assignedOfficer.toString();
+  if (previousOfficerId === newOfficerId) {
+    throw new ValidationError(
+      "Complaint is already assigned to this officer."
+    );
+  }
+
+  if (!mongoose.Types.ObjectId.isValid(newOfficerId)) {
+    throw new ValidationError("Invalid new officer ID format");
+  }
+
+  const newOfficer = await Officer.findById(newOfficerId);
+  if (!newOfficer) {
+    throw new NotFoundError("Officer not found");
+  }
+
+  const newUser = await User.findOne({
+    officerId: newOfficer._id,
+    role: "officer",
+  });
+  if (!newUser) {
+    throw new NotFoundError("User account not found for this officer");
+  }
+
+  // Single source of truth: remove complaint from previous officer's list
+  await removeComplaintFromOfficer(complaint._id, previousOfficerId);
+
+  // Add complaint to new officer's list
+  if (!newOfficer.assignedComplaints) {
+    newOfficer.assignedComplaints = [];
+  }
+  if (!newOfficer.assignedComplaints.includes(complaint._id)) {
+    newOfficer.assignedComplaints.push(complaint._id);
+    newOfficer.noOfComplaintsArrived =
+      (newOfficer.noOfComplaintsArrived || 0) + 1;
+  }
+  await newOfficer.save();
+
+  // Previous officer details for timeline (handles legacy: no timeline element needed to exist)
+  let previousOfficerName: string | undefined;
+  let previousOfficerEmail: string | undefined;
+  try {
+    const prevOfficer = await Officer.findById(previousOfficerId).lean();
+    if (prevOfficer) {
+      previousOfficerName = prevOfficer.name;
+      previousOfficerEmail = prevOfficer.email;
+    }
+  } catch (_) {
+    // ignore
+  }
+
+  // Update complaint to new officer (reopened if it was closed, so new officer sees it as active)
+  complaint.assigned_to_user_id = newUser.id;
+  complaint.assignedOfficer = newOfficer._id;
+  complaint.isOfficerAssigned = true;
+  complaint.assignedTime = new Date();
+  complaint.arrivalTime = new Date();
+  complaint.timeBoundary = 7;
+  complaint.status = "in_progress";
+  if (complaint.isComplaintClosed) {
+    complaint.isComplaintClosed = false;
+    // closingDetails kept for audit; complaint is effectively reopened for new officer
+  }
+  await complaint.save();
+
+  try {
+    await complaintTimeline.appendOfficerReassigned(
+      complaintId,
+      {
+        previous_officer_id: previousOfficerId,
+        previous_officer_name: previousOfficerName,
+        previous_officer_email: previousOfficerEmail,
+        new_officer_id: newOfficer._id.toString(),
+        new_officer_name: newOfficer.name,
+        new_officer_email: newOfficer.email,
+        new_time_deadline_days: 7,
+      },
+      adminId ? { user_id: adminId, role: "admin" } : undefined
+    );
+  } catch (err) {
+    logger.warn("Timeline appendOfficerReassigned failed:", err);
+  }
+
+  logger.info(
+    `Complaint ${complaintId} reassigned from officer ${previousOfficerId} to ${newOfficer.name} (${newOfficer.email})`
+  );
+
+  return {
+    complaint: complaint.toObject(),
+    officer: newOfficer.toObject(),
+  };
+};
+
+/**
+ * Unassign complaint from officer (admin only).
+ * Clears assignment on complaint and appends timeline event.
+ */
+export const unassignComplaint = async (
+  complaintId: string,
+  adminId?: string
+): Promise<any> => {
+  const complaint = await Complaint.findOne({ id: complaintId });
+  if (!complaint) {
+    throw new NotFoundError("Complaint not found");
+  }
+
+  const previousOfficerId = complaint.assignedOfficer?.toString();
+  let previousOfficerName: string | undefined;
+  let previousOfficerEmail: string | undefined;
+  if (previousOfficerId) {
+    try {
+      const prevOfficer = await Officer.findById(previousOfficerId).lean();
+      if (prevOfficer) {
+        previousOfficerName = prevOfficer.name;
+        previousOfficerEmail = prevOfficer.email;
+      }
+    } catch (_) {
+      // ignore
+    }
+    // Single source of truth: remove complaint from officer's list
+    await removeComplaintFromOfficer(complaint._id, previousOfficerId);
+  }
+
+  complaint.assigned_to_user_id = undefined;
+  complaint.assignedOfficer = undefined;
+  complaint.isOfficerAssigned = false;
+  if (complaint.status === "in_progress") {
+    complaint.status = "pending";
+  }
+  await complaint.save();
+
+  try {
+    if (previousOfficerId) {
+      await complaintTimeline.appendOfficerUnassigned(
+        complaintId,
+        {
+          previous_officer_id: previousOfficerId,
+          previous_officer_name: previousOfficerName,
+          previous_officer_email: previousOfficerEmail,
+        },
+        adminId ? { user_id: adminId, role: "admin" } : undefined
+      );
+    }
+  } catch (err) {
+    logger.warn("Timeline appendOfficerUnassigned failed:", err);
+  }
+
+  logger.info(`Complaint ${complaintId} unassigned`);
+  return complaint.toObject();
 };

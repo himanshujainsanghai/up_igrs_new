@@ -76,6 +76,7 @@ export interface IComplaint extends Document {
 
   // ADMIN & METADATA
   created_by_admin?: boolean; // Created by admin flag
+  created_via_whatsapp?: boolean; // True when complaint was submitted via WhatsApp module
   voter_id?: string; // Voter ID (alphanumeric, max 20)
 
   // AI ANALYSIS FIELDS
@@ -274,7 +275,11 @@ const ComplaintSchema = new Schema<IComplaint>(
     },
     contact_phone: {
       type: String,
-      match: [/^\+?[\d\s-]{10,15}$/, "Please provide a valid phone number"],
+      required: [true, "Contact phone is required"],
+      match: [
+        /^\+?[\d\s-]{10,15}$/,
+        "Please provide a valid phone number (10 digits, starting with 6/7/8/9)",
+      ],
       trim: true,
     },
     assigned_department: {
@@ -410,6 +415,10 @@ const ComplaintSchema = new Schema<IComplaint>(
       maxlength: [2000, "Resolution notes cannot exceed 2000 characters"],
     },
     created_by_admin: {
+      type: Boolean,
+      default: false,
+    },
+    created_via_whatsapp: {
       type: Boolean,
       default: false,
     },

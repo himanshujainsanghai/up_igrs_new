@@ -13,7 +13,12 @@ const consoleFormat = winston.format.combine(
   winston.format.printf(({ level, message, timestamp, ...metadata }) => {
     let msg = `${timestamp} [${level}]: ${message}`;
     if (Object.keys(metadata).length > 0) {
-      msg += ` ${JSON.stringify(metadata)}`;
+      try {
+        msg += ` ${JSON.stringify(metadata)}`;
+      } catch {
+        // Fallback: metadata has circular refs or is non-serializable
+        msg += ` [metadata could not be serialized]`;
+      }
     }
     return msg;
   })
@@ -24,11 +29,11 @@ const logger = winston.createLogger({
   format: logFormat,
   defaultMeta: { service: 'grievance-aid-backend' },
   transports: [
-    // Write all logs to console
+    // Console output with colored, readable format
     new winston.transports.Console({
       format: consoleFormat,
     }),
-    // Write all logs with level 'error' and below to error.log
+    // Write error-level logs to error.log
     new winston.transports.File({
       filename: 'logs/error.log',
       level: 'error',
@@ -39,15 +44,6 @@ const logger = winston.createLogger({
     }),
   ],
 });
-
-// If we're not in production, log to console with simpler format
-if (process.env.NODE_ENV !== 'production') {
-  logger.add(
-    new winston.transports.Console({
-      format: consoleFormat,
-    })
-  );
-}
 
 export default logger;
 

@@ -214,11 +214,11 @@ const AppLayout: React.FC<AppLayoutProps> = ({ children }) => {
     );
   }
 
-  // Standard layout for other pages
+  // Standard layout for other pages — single scroll (no inner overflow) to avoid double scrollbar
   return (
-    <div className="flex flex-col h-screen bg-gradient-to-br from-orange-50 to-white">
+    <div className="flex flex-col min-h-screen bg-gradient-to-br from-orange-50 to-white">
       {/* Header */}
-      <header className="bg-white border-b border-orange-200 shadow-sm">
+      <header className="bg-white border-b border-orange-200 shadow-sm shrink-0">
         <div className="container mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
           <div className="flex items-center justify-between h-16">
             {/* Logo/Brand */}
@@ -258,7 +258,7 @@ const AppLayout: React.FC<AppLayoutProps> = ({ children }) => {
         </div>
       </header>
 
-      <main className="flex-1 overflow-y-auto pb-20 md:pb-0">
+      <main className="flex-1 pb-20 md:pb-0">
         <div className="container mx-auto max-w-7xl px-4 sm:px-6 lg:px-8 md:py-8">
           {children}
         </div>

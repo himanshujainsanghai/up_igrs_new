@@ -30,12 +30,21 @@ import {
   SubdistrictDemographics,
 } from "@/services/geo.service";
 
-const ComplaintsHeatMapPage: React.FC = () => {
+interface ComplaintsHeatMapPageProps {
+  /** When true, page is rendered inside AdminLayout (e.g. dashboard); keeps navbar/sidebar visible. */
+  embedded?: boolean;
+}
+
+const ComplaintsHeatMapPage: React.FC<ComplaintsHeatMapPageProps> = ({
+  embedded = false,
+}) => {
   const navigate = useNavigate();
   const [geoData, setGeoData] = useState<FeatureCollection | null>(null);
 
-  // Prevent body scrolling when map page is mounted
+  // Prevent body scrolling when map page is mounted (only in standalone full-screen mode)
   useEffect(() => {
+    if (embedded) return;
+
     // Store original values
     const originalBodyOverflow = document.body.style.overflow;
     const originalBodyMargin = document.body.style.margin;
@@ -77,9 +86,9 @@ const ComplaintsHeatMapPage: React.FC = () => {
         rootElement.style.cssText = originalRootStyle;
       }
     };
-  }, []);
+  }, [embedded]);
   const [badaunGeoData, setBadaunGeoData] = useState<FeatureCollection | null>(
-    null
+    null,
   );
   const [loadingBadaunGeoJson, setLoadingBadaunGeoJson] = useState(false);
   const [heatMapData, setHeatMapData] = useState<DistrictSummary[]>([]);
@@ -91,7 +100,7 @@ const ComplaintsHeatMapPage: React.FC = () => {
   const [isPanelOpen, setIsPanelOpen] = useState(false);
   const [loadingDistrictData, setLoadingDistrictData] = useState(false);
   const [districtDataError, setDistrictDataError] = useState<string | null>(
-    null
+    null,
   );
   // Table of Contents checkbox states
   const [showIndiaAssets, setShowIndiaAssets] = useState(false);
@@ -117,7 +126,7 @@ const ComplaintsHeatMapPage: React.FC = () => {
           geoService.getUttarPradeshGeoJson(),
           geoService.getAllDistrictsHeatMap().catch((err) => {
             console.warn(
-              `Failed to fetch heat map data: ${err.message}, continuing without heat values`
+              `Failed to fetch heat map data: ${err.message}, continuing without heat values`,
             );
             return null;
           }),
@@ -133,20 +142,20 @@ const ComplaintsHeatMapPage: React.FC = () => {
           const badaunEntries = heatMapResponse.districts.filter(
             (d: DistrictSummary) =>
               d.districtCode.toLowerCase() === "badaun" ||
-              d.districtCode.toLowerCase() === "budaun"
+              d.districtCode.toLowerCase() === "budaun",
           );
           if (badaunEntries.length > 0) {
             console.log(
               "✅ Found Badaun/Budaun in heat map data:",
-              badaunEntries
+              badaunEntries,
             );
           } else {
             console.warn("⚠️ Badaun/Budaun not found in heat map data");
             console.log(
               "Available districts:",
               heatMapResponse.districts.map(
-                (d: DistrictSummary) => d.districtCode
-              )
+                (d: DistrictSummary) => d.districtCode,
+              ),
             );
           }
         }
@@ -173,7 +182,7 @@ const ComplaintsHeatMapPage: React.FC = () => {
         const districtLower = selectedDistrict.toLowerCase();
         const data = await geoService.getDistrictPOI(
           districtLower,
-          "india-assets"
+          "india-assets",
         );
         setIndiaAssetsData(data);
         console.log("India Assets POI Data:", data);
@@ -382,7 +391,7 @@ const ComplaintsHeatMapPage: React.FC = () => {
       };
       return mapping[districtCode] || null;
     },
-    []
+    [],
   );
 
   /**
@@ -408,23 +417,21 @@ const ComplaintsHeatMapPage: React.FC = () => {
 
         // For other districts, fetch detailed district data via API
         // This is the ONLY place where district detail API is called
-        const districtData = await geoService.getDistrictHeatMapByCode(
-          districtCode
-        );
+        const districtData =
+          await geoService.getDistrictHeatMapByCode(districtCode);
 
         // ALSO fetch demographics for the subdistrict
         const subdistrictLgd = getSubdistrictLgd(districtCode);
         if (subdistrictLgd) {
           try {
-            const demographics = await geoService.getSubdistrictDemographics(
-              subdistrictLgd
-            );
+            const demographics =
+              await geoService.getSubdistrictDemographics(subdistrictLgd);
             setSubdistrictDemographics(demographics);
             console.log("Demographics loaded for", districtCode, demographics);
           } catch (err: any) {
             console.warn(
               `Failed to fetch demographics for ${districtCode}:`,
-              err.message
+              err.message,
             );
             setSubdistrictDemographics(null);
           }
@@ -445,7 +452,7 @@ const ComplaintsHeatMapPage: React.FC = () => {
         } else {
           // Empty or invalid data
           console.warn(
-            `Invalid or empty district data received for ${districtCode}`
+            `Invalid or empty district data received for ${districtCode}`,
           );
           setSelectedDistrictData(null);
           setDistrictDataError("empty");
@@ -453,7 +460,7 @@ const ComplaintsHeatMapPage: React.FC = () => {
       } catch (err: any) {
         console.error(
           `Failed to fetch district data for ${districtCode}:`,
-          err?.message || err
+          err?.message || err,
         );
         setSelectedDistrictData(null);
         setDistrictDataError("error");
@@ -461,7 +468,7 @@ const ComplaintsHeatMapPage: React.FC = () => {
         setLoadingDistrictData(false);
       }
     },
-    [getSubdistrictLgd, navigate]
+    [getSubdistrictLgd, navigate],
   );
 
   const handleClosePanel = useCallback(() => {
@@ -486,25 +493,29 @@ const ComplaintsHeatMapPage: React.FC = () => {
         await handleDistrictClick(districtCode);
       }
     },
-    [handleDistrictClick, navigate]
+    [handleDistrictClick, navigate],
   );
 
   return (
     <div
       className="flex flex-col bg-gradient-to-br from-orange-50 to-white overflow-hidden"
-      style={{
-        position: "fixed",
-        top: 0,
-        left: 0,
-        right: 0,
-        bottom: 0,
-        height: "100vh",
-        width: "100%",
-        margin: 0,
-        padding: 0,
-      }}
+      style={
+        embedded
+          ? { minHeight: "100%", flex: 1, margin: 0, padding: 0 }
+          : {
+              position: "fixed",
+              top: 0,
+              left: 0,
+              right: 0,
+              bottom: 0,
+              height: "100vh",
+              width: "100%",
+              margin: 0,
+              padding: 0,
+            }
+      }
     >
-      {/* Main Content - Full Screen Map (No Header) */}
+      {/* Main Content - Full Screen Map (No Header when standalone) */}
       <main
         className="flex-1 min-h-0 flex flex-col overflow-hidden"
         style={{

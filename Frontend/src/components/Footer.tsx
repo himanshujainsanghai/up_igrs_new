@@ -4,6 +4,7 @@
  */
 
 import React from "react";
+import { Link } from "react-router-dom";
 import { Facebook, Twitter, Youtube, ArrowUp } from "lucide-react";
 import { useI18n } from "@/contexts/I18nContext";
 
@@ -19,30 +20,36 @@ const Footer: React.FC = () => {
       <div className="container mx-auto max-w-7xl px-4 sm:px-6 lg:px-8 py-8">
         {/* Footer Links */}
         <div className="flex flex-wrap items-center justify-center gap-6 mb-6">
-          <a
-            href="#"
-            className="text-sm hover:text-[#ff791a] transition-colors"
-          >
-            {t("footer.links.websitePolicies")}
-          </a>
-          <a
-            href="#"
+          <Link
+            to="/about"
             className="text-sm hover:text-[#ff791a] transition-colors"
           >
             {t("footer.links.aboutUs")}
-          </a>
-          <a
-            href="#"
-            className="text-sm hover:text-[#ff791a] transition-colors"
-          >
-            {t("footer.links.suggestions")}
-          </a>
-          <a
-            href="#"
+          </Link>
+          <Link
+            to="/contact"
             className="text-sm hover:text-[#ff791a] transition-colors"
           >
             {t("footer.links.contactUs")}
-          </a>
+          </Link>
+          <Link
+            to="/privacy-policy"
+            className="text-sm hover:text-[#ff791a] transition-colors"
+          >
+            {t("footer.links.websitePolicies")}
+          </Link>
+          <Link
+            to="/terms-and-conditions"
+            className="text-sm hover:text-[#ff791a] transition-colors"
+          >
+            Terms & Conditions
+          </Link>
+          <Link
+            to="/user-rights"
+            className="text-sm hover:text-[#ff791a] transition-colors"
+          >
+            User Rights
+          </Link>
           <a
             href="#"
             className="text-sm hover:text-[#ff791a] transition-colors"
