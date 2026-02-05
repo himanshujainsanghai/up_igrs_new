@@ -17,7 +17,8 @@ interface EnvConfig {
   OPENROUTER_API_KEY?: string;
   OPENROUTER_MODEL?: string;
   OPENROUTER_VISION_MODEL?: string;
-  DOC_SUMMARIZE_MODEL?: string; // Model for document summarization (e.g. google/gemini-3-flash-preview)
+  DOC_SUMMARIZE_MODEL?: string;
+  WHATSAPP_CONVERSATION_MODEL?: string; // WhatsApp AI-assisted complaint parsing
   LOCATIONIQ_API_KEY?: string;
   CORS_ORIGIN: string;
   FRONTEND_URL: string;
@@ -127,6 +128,10 @@ const validateEnv = (): EnvConfig => {
       process.env.OPENROUTER_VISION_MODEL || "openai/gpt-4o",
     DOC_SUMMARIZE_MODEL:
       process.env.DOC_SUMMARIZE_MODEL || "google/gemini-3-flash-preview",
+    WHATSAPP_CONVERSATION_MODEL:
+      process.env.WHATSAPP_CONVERSATION_MODEL ||
+      process.env.DOC_SUMMARIZE_MODEL ||
+      "google/gemini-3-flash-preview",
     LOCATIONIQ_API_KEY: process.env.LOCATIONIQ_API_KEY || "",
     CORS_ORIGIN: process.env.CORS_ORIGIN || "http://localhost:8080",
     FRONTEND_URL: process.env.FRONTEND_URL || "http://localhost:8080",

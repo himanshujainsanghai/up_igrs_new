@@ -6,6 +6,7 @@
 import React, { useState } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
 import { useAuth } from "@/hooks/useAuth";
+import { useNotificationContext } from "@/contexts/NotificationContext";
 import {
   LayoutDashboard,
   FileText,
@@ -82,6 +83,7 @@ const AdminLayout: React.FC<AdminLayoutProps> = ({ children, stats }) => {
   const location = useLocation();
   const navigate = useNavigate();
   const { user, logout, isAdmin, isOfficer } = useAuth();
+  const { unreadCount: notificationUnreadCount } = useNotificationContext();
   const [sidebarOpen, setSidebarOpen] = useState(true);
   const [sidebarCollapsed, setSidebarCollapsed] = useState(true);
 
@@ -292,6 +294,8 @@ const AdminLayout: React.FC<AdminLayoutProps> = ({ children, stats }) => {
     if (item.type === "item") {
       const Icon = item.icon;
       const isItemActive = isActive(item.path);
+      const isNotifications = item.path === "/admin/notifications";
+      const showBadge = isNotifications && notificationUnreadCount > 0;
       return (
         <SidebarMenuItem key={item.path}>
           <SidebarMenuButton
@@ -300,16 +304,32 @@ const AdminLayout: React.FC<AdminLayoutProps> = ({ children, stats }) => {
               sidebarCollapsed ? (
                 <div
                   className={cn(
-                    "w-8 h-8 rounded-full flex items-center justify-center transition-colors",
+                    "relative w-8 h-8 rounded-full flex items-center justify-center transition-colors",
                     isItemActive
                       ? "bg-primary text-primary-foreground"
                       : "bg-sidebar-accent/50 text-sidebar-foreground hover:bg-sidebar-accent"
                   )}
                 >
                   <Icon className="w-5 h-5" />
+                  {showBadge && (
+                    <span className="absolute -top-0.5 -right-0.5 min-w-[18px] h-[18px] px-1 flex items-center justify-center rounded-full bg-blue-900 text-white text-xs font-medium">
+                      {notificationUnreadCount > 99
+                        ? "99+"
+                        : notificationUnreadCount}
+                    </span>
+                  )}
                 </div>
               ) : (
-                <Icon className="w-5 h-5" />
+                <span className="relative inline-flex">
+                  <Icon className="w-5 h-5" />
+                  {showBadge && (
+                    <span className="absolute -top-1 -right-1 min-w-[18px] h-[18px] px-1 flex items-center justify-center rounded-full bg-blue-900 text-white text-xs font-medium">
+                      {notificationUnreadCount > 99
+                        ? "99+"
+                        : notificationUnreadCount}
+                    </span>
+                  )}
+                </span>
               )
             }
             onClick={() => navigate(item.path)}
@@ -319,7 +339,18 @@ const AdminLayout: React.FC<AdminLayoutProps> = ({ children, stats }) => {
                 "justify-center px-2 bg-transparent hover:bg-transparent"
             )}
           >
-            {!sidebarCollapsed && item.label}
+            {!sidebarCollapsed && (
+              <>
+                {item.label}
+                {/* {showBadge && (
+                  <span className="ml-auto flex items-center justify-center min-w-[20px] h-5 px-1.5 rounded-full bg-red-500 text-white text-xs font-medium">
+                    {notificationUnreadCount > 99
+                      ? "99+"
+                      : notificationUnreadCount}
+                  </span>
+                )} */}
+              </>
+            )}
           </SidebarMenuButton>
         </SidebarMenuItem>
       );

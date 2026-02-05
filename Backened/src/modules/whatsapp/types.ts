@@ -7,11 +7,15 @@ export type ConversationIntent = "file" | "track" | "other";
 
 export type ConversationState =
   | "START"
+  | "COLLECT_FILE_MODE"
   | "COLLECT_BASICS"
   | "COLLECT_LOCATION_DETAILS"
+  | "COLLECT_FREE_FORM"
   | "COLLECT_DESCRIPTION"
   | "COLLECT_PHONE"
   | "COLLECT_MEDIA"
+  | "AI_PROCESSING"
+  | "FILL_MISSING"
   | "CONFIRM"
   | "EDIT_FIELD"
   | "SUBMIT"
@@ -20,6 +24,9 @@ export type ConversationState =
   | "TRACK_RESULT"
   | "DONE"
   | "CANCELLED";
+
+/** How the user chose to file: step-by-step or AI-assisted (describe in one go). */
+export type FileMode = "step" | "ai";
 
 export interface AttachmentMeta {
   url: string;
@@ -46,12 +53,20 @@ export interface CollectedComplaintData {
 }
 
 export interface WhatsAppSession {
-  user: string; // WhatsApp phone number (with country code)
-  /** Set after intent capture (START → 1/2/3). Undefined when state is START. */
+  user: string;
   intent?: ConversationIntent;
   state: ConversationState;
   data: CollectedComplaintData;
-  /** When state is EDIT_FIELD, which field the user is editing. */
+  /** Step-by-step vs AI-assisted (describe in one go). Set when filing. */
+  fileMode?: FileMode;
+  /** Accumulated text in COLLECT_DESCRIPTION until user sends "done". */
+  pendingDescriptionBuffer?: string;
+  /** In COLLECT_FREE_FORM: text to send to AI until user says "done". */
+  freeFormTextBuffer?: string;
+  /** When AI_PROCESSING was set (for timeout). */
+  aiRequestedAt?: number;
+  /** In FILL_MISSING: ordered list of missing field keys to ask for. */
+  pendingMissingFields?: (keyof CollectedComplaintData)[];
   pendingEditField?: keyof CollectedComplaintData;
   flowVersion?: string;
   lastMessageAt?: number;

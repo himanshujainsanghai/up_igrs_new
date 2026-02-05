@@ -25,7 +25,7 @@ export const notesUtils = {
     try {
       const note = await complaintsService.addNote(
         complaintId,
-        noteContent.trim(),
+        noteContent.trim()
       );
       toast.success("Note added successfully");
       return note;
@@ -36,16 +36,15 @@ export const notesUtils = {
   },
 
   /**
-   * Load notes for complaint
+   * Load notes for complaint (segregated: admin vs officer)
    */
-  async loadNotes(complaintId: string): Promise<any[]> {
+  async loadNotes(complaintId: string) {
     try {
-      const notes = await complaintsService.getNotes(complaintId);
-      return notes;
+      return await complaintsService.getNotes(complaintId);
     } catch (error: any) {
       console.error("Failed to load notes:", error);
       toast.error("Failed to load notes");
-      return [];
+      return { adminNotes: [], officerNotes: [] };
     }
   },
 };
@@ -57,7 +56,7 @@ export const documentsUtils = {
   async addDocument(
     complaintId: string,
     file: File,
-    documentType: "inward" | "outward",
+    documentType: "inward" | "outward"
   ): Promise<any> {
     // Validate file
     if (!file) {
@@ -97,16 +96,15 @@ export const documentsUtils = {
   },
 
   /**
-   * Load documents for complaint
+   * Load documents for complaint (segregated: admin vs officer)
    */
-  async loadDocuments(complaintId: string): Promise<any[]> {
+  async loadDocuments(complaintId: string) {
     try {
-      const documents = await complaintsService.getDocuments(complaintId);
-      return documents;
+      return await complaintsService.getDocuments(complaintId);
     } catch (error: any) {
       console.error("Failed to load documents:", error);
       toast.error("Failed to load documents");
-      return [];
+      return { adminDocuments: [], officerDocuments: [] };
     }
   },
 };
@@ -121,7 +119,7 @@ export const researchUtils = {
    */
   async performResearch(
     complaintId: string,
-    depth: "basic" | "detailed" | "comprehensive" = "detailed",
+    depth: "basic" | "detailed" | "comprehensive" = "detailed"
   ): Promise<any> {
     try {
       const response = await aiService.researchRelatedIssues(complaintId);
@@ -186,7 +184,7 @@ export const draftLetterUtils = {
                 office_address: exec.contact?.address || "",
                 role: exec.role || "",
               });
-            },
+            }
           );
         }
 
@@ -207,7 +205,7 @@ export const draftLetterUtils = {
                 office_address: exec.contact?.address || "",
                 role: exec.role || "",
               });
-            },
+            }
           );
         }
       });
@@ -226,7 +224,7 @@ export const draftLetterUtils = {
    */
   async draftLetter(
     complaintId: string,
-    selectedExecutive?: any,
+    selectedExecutive?: any
   ): Promise<any> {
     try {
       // Transform executive to match expected officer format
@@ -250,7 +248,7 @@ export const draftLetterUtils = {
       // Pass selected executive directly to API
       const response = await aiService.draftComplaintLetter(
         complaintId,
-        officerFormat,
+        officerFormat
       );
       // Backend returns ComplaintLetterResponse and auto-saves
       const letterData = response?.letter || response;
@@ -268,7 +266,7 @@ export const draftLetterUtils = {
   async saveLetter(
     complaintId: string,
     letter: any,
-    editedBody: string,
+    editedBody: string
   ): Promise<any> {
     try {
       const updatedLetter = {
@@ -339,7 +337,7 @@ export const draftLetterUtils = {
       phone?: string;
       office_address?: string;
       district?: string;
-    },
+    }
   ): Promise<{ selected_officer: any; letter: any }> {
     try {
       const officerFormat = {
@@ -411,7 +409,7 @@ export const actionsUtils = {
     try {
       const result = await complaintsService.sendComplaintEmail(
         complaintId,
-        recipientEmail,
+        recipientEmail
       );
       toast.success("Email sent successfully");
       return result;

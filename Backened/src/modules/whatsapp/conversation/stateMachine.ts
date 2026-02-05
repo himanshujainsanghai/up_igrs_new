@@ -84,7 +84,7 @@ const setField = (
   (data as any)[key] = value;
 };
 
-const summary = (data: CollectedComplaintData) => {
+export const summary = (data: CollectedComplaintData) => {
   const parts: string[] = [];
   parts.push(`Name: ${data.contact_name}`);
   parts.push(`Email: ${data.contact_email}`);
@@ -135,7 +135,7 @@ const EDIT_FIELD_MAP: Record<string, keyof CollectedComplaintData> = {
   description: "description",
 };
 
-function getPromptForField(key: keyof CollectedComplaintData): string {
+export function getPromptForField(key: keyof CollectedComplaintData): string {
   const entry = BASIC_FIELDS_ORDER.find((e) => e.key === key);
   if (entry) return entry.prompt;
   if (key === "description") return templates.askDescription;
@@ -253,6 +253,7 @@ const handleBasicFieldInput = (
     const remaining = nextMissingBasicKey(session.data);
     if (remaining) return remaining.prompt;
     session.state = "COLLECT_DESCRIPTION";
+    session.pendingDescriptionBuffer = undefined;
     return templates.askDescription;
   }
 
@@ -262,17 +263,56 @@ const handleBasicFieldInput = (
     return remaining.prompt;
   }
   session.state = "COLLECT_DESCRIPTION";
+  session.pendingDescriptionBuffer = undefined;
   return templates.askDescription;
 };
 
-const handleDescription = (session: WhatsAppSession, text: string): string => {
-  const cleaned = text.trim();
-  if (cleaned.length < 20) return "Description must be at least 20 characters.";
-  if (cleaned.length > 5000)
-    return "Description cannot exceed 5000 characters.";
-  setField(session.data, "description", cleaned);
-  session.state = "COLLECT_PHONE";
-  return templates.askPhone;
+const DESCRIPTION_MIN = 20;
+const DESCRIPTION_MAX = 5000;
+
+export interface HandleDescriptionOptions {
+  /** After valid "done": state to set (default COLLECT_PHONE). */
+  afterDoneState?: ConversationState;
+  /** After valid "done": reply to return (default templates.askPhone). */
+  afterDoneReply?: string;
+  /** If set, clear pendingEditField when finalizing (for EDIT description). */
+  pendingEditFieldToClear?: boolean;
+}
+
+const handleDescription = (
+  session: WhatsAppSession,
+  text: string,
+  options?: HandleDescriptionOptions
+): string => {
+  const cleaned = text.trim().toLowerCase();
+  const buffer = session.pendingDescriptionBuffer ?? "";
+
+  if (cleaned === "done") {
+    const final = buffer.trim();
+    if (final.length < DESCRIPTION_MIN) {
+      return templates.descriptionTooShort;
+    }
+    if (final.length > DESCRIPTION_MAX) {
+      return templates.descriptionTooLong;
+    }
+    setField(session.data, "description", final);
+    session.pendingDescriptionBuffer = undefined;
+    session.state = options?.afterDoneState ?? "COLLECT_PHONE";
+    if (options?.pendingEditFieldToClear) {
+      session.pendingEditField = undefined;
+    }
+    return options?.afterDoneReply ?? templates.askPhone;
+  }
+
+  const trimmed = text.trim();
+  if (!trimmed) return templates.descriptionAdded;
+
+  const next = buffer ? `${buffer}\n${trimmed}` : trimmed;
+  if (next.length > DESCRIPTION_MAX) {
+    return templates.descriptionTooLong;
+  }
+  session.pendingDescriptionBuffer = next;
+  return templates.descriptionAdded;
 };
 
 /** Keywords to use sender's current WhatsApp number. */
@@ -329,7 +369,7 @@ const handleMedia = (
         i.fileName === msg.mediaId ||
         (i.url && msg.mediaId && i.fileName?.startsWith(msg.mediaId))
     );
-    if (already) return "Image received.";
+    if (already) return `Image received. ${templates.askDoneConfirm}`;
     session.data.images = session.data.images || [];
     session.data.images.push({
       url: "",
@@ -337,7 +377,7 @@ const handleMedia = (
       mimeType: msg.mimeType,
       fileName: msg.fileName,
     });
-    return "Image received.";
+    return `Image received. ${templates.askDoneConfirm}`;
   }
   if (msg.type === "document") {
     const already = session.data.documents?.some(
@@ -346,7 +386,7 @@ const handleMedia = (
         i.fileName === msg.mediaId ||
         (i.url && msg.mediaId && i.fileName?.startsWith(msg.mediaId))
     );
-    if (already) return "Document received.";
+    if (already) return `Document received. ${templates.askDoneConfirm}`;
     session.data.documents = session.data.documents || [];
     session.data.documents.push({
       url: "",
@@ -354,13 +394,13 @@ const handleMedia = (
       mimeType: msg.mimeType,
       fileName: msg.fileName,
     });
-    return "Document received.";
+    return `Document received. ${templates.askDoneConfirm}`;
   }
   if (msg.text?.toLowerCase() === "done") {
     session.state = "CONFIRM";
     return templates.confirm(summary(session.data));
   }
-  return "Send images/documents, or reply DONE to continue.";
+  return `Send images/documents, or reply DONE when finished. ${templates.askDoneConfirm}`;
 };
 
 const handleConfirm = async (
@@ -441,6 +481,9 @@ const handleConfirm = async (
       session.data.longitude = undefined;
       session.data.location = undefined;
     }
+    if (fieldKey === "description") {
+      session.pendingDescriptionBuffer = undefined;
+    }
     return {
       replies: [getPromptForField(fieldKey)],
     };
@@ -453,9 +496,15 @@ export const processChatMessage = async (
   session: WhatsAppSession | null
 ): Promise<StateMachineResult> => {
   const current = session || ensureSession(incoming.from, "file");
+  const FREE_FORM_TEXT_CAP = 15_000;
+
   if (incoming.text && incoming.text.trim().toLowerCase() === "new") {
     current.state = "COLLECT_BASICS";
     current.data = {};
+    current.pendingDescriptionBuffer = undefined;
+    current.fileMode = undefined;
+    current.freeFormTextBuffer = undefined;
+    current.pendingMissingFields = undefined;
     return {
       replies: ["Starting a new complaint. " + BASIC_FIELDS_ORDER[0].prompt],
       session: current,
@@ -466,6 +515,107 @@ export const processChatMessage = async (
   // Handle location pins at any step (sets latitude, longitude, location when user shares pin)
   replies.push(...handleLocationMessage(incoming, current));
 
+  if (current.state === "COLLECT_FREE_FORM") {
+    const text = (incoming.text || "").trim();
+    if (text.toLowerCase() === "done") {
+      replies.push(templates.freeFormDoneProcessing);
+      return { replies, session: current };
+    }
+    if (text) {
+      const buf = current.freeFormTextBuffer ?? "";
+      const next = buf ? `${buf}\n${text}` : text;
+      if (next.length > FREE_FORM_TEXT_CAP) {
+        replies.push(
+          "Message limit reached. Reply *done* to continue with what we have."
+        );
+      } else {
+        current.freeFormTextBuffer = next;
+        replies.push(templates.freeFormAdded);
+      }
+    } else {
+      // Media-only message (image/document): acknowledge so user gets a reply
+      replies.push(templates.freeFormAdded);
+    }
+    return { replies, session: current };
+  }
+
+  if (current.state === "AI_PROCESSING") {
+    replies.push(templates.aiProcessingWait);
+    return { replies, session: current };
+  }
+
+  if (
+    current.state === "FILL_MISSING" &&
+    current.pendingMissingFields?.length
+  ) {
+    const key = current.pendingMissingFields[0];
+    if (key === "latitude") {
+      if (incoming.location) {
+        setField(current.data, "latitude", incoming.location.latitude);
+        setField(current.data, "longitude", incoming.location.longitude);
+        setField(
+          current.data,
+          "location",
+          incoming.location.address || incoming.location.name
+        );
+        current.pendingMissingFields = current.pendingMissingFields.slice(1);
+        if (current.pendingMissingFields.length === 0) {
+          current.state = "CONFIRM";
+          replies.push(templates.confirm(summary(current.data)));
+          replies.push("Reply YES to submit or EDIT <field> to change.");
+        } else {
+          replies.push(getPromptForField(current.pendingMissingFields[0]));
+        }
+      } else {
+        const raw = (incoming.text || "").trim();
+        const parts = raw.split(/[\s,]+/).filter(Boolean);
+        const latNum = parts.length >= 1 ? Number(parts[0]) : NaN;
+        const longNum = parts.length >= 2 ? Number(parts[1]) : NaN;
+        const vLat = validateLatitude(latNum);
+        const vLong = validateLongitude(longNum);
+        if (!vLat.ok) {
+          replies.push(vLat.error ?? "Invalid latitude.");
+          replies.push(templates.askLocation);
+        } else if (!vLong.ok) {
+          replies.push(vLong.error ?? "Invalid longitude.");
+          replies.push(templates.askLocation);
+        } else {
+          setField(current.data, "latitude", latNum);
+          setField(current.data, "longitude", longNum);
+          current.pendingMissingFields = current.pendingMissingFields.slice(1);
+          if (current.pendingMissingFields.length === 0) {
+            current.state = "CONFIRM";
+            replies.push(templates.confirm(summary(current.data)));
+            replies.push("Reply YES to submit or EDIT <field> to change.");
+          } else {
+            replies.push(getPromptForField(current.pendingMissingFields[0]));
+          }
+        }
+      }
+    } else {
+      const err = validateAndSetSingleField(
+        current,
+        key,
+        (incoming.text || "").trim(),
+        current.user
+      );
+      if (err) {
+        replies.push(err);
+        replies.push(getPromptForField(key));
+      } else {
+        current.pendingMissingFields = current.pendingMissingFields.slice(1);
+        if (current.pendingMissingFields.length === 0) {
+          current.state = "CONFIRM";
+          replies.push(templates.confirm(summary(current.data)));
+          replies.push("Reply YES to submit or EDIT <field> to change.");
+        } else {
+          replies.push(getPromptForField(current.pendingMissingFields[0]));
+        }
+      }
+    }
+    return { replies, session: current };
+  }
+
   if (current.state === "COLLECT_BASICS") {
     const prompt = handleBasicFieldInput(current, incoming.text || "");
     if (prompt) {
@@ -473,6 +623,7 @@ export const processChatMessage = async (
     } else if (!nextMissingBasicKey(current.data)) {
       // All basics filled (e.g. user just sent location pin) → ask for description
       current.state = "COLLECT_DESCRIPTION";
+      current.pendingDescriptionBuffer = undefined;
       replies.push(templates.askDescription);
     }
   } else if (current.state === "COLLECT_DESCRIPTION") {
@@ -500,6 +651,15 @@ export const processChatMessage = async (
       replies.push("Location updated.");
       replies.push(templates.confirm(summary(current.data)));
       replies.push("Reply YES to submit or EDIT <field> to change.");
+    } else if (key === "description") {
+      const reply = handleDescription(current, incoming.text || "", {
+        afterDoneState: "CONFIRM",
+        afterDoneReply: `Updated.\n${templates.confirm(
+          summary(current.data)
+        )}\nReply YES to submit or EDIT <field> to change.`,
+        pendingEditFieldToClear: true,
+      });
+      replies.push(reply);
     } else {
       const text = incoming.text || "";
       const err = validateAndSetSingleField(current, key, text, current.user);

@@ -84,19 +84,28 @@ export const getComplaintTimeline = async (
 ): Promise<void> => {
   try {
     const { id } = req.params;
-    const limit = req.query.limit ? parseInt(req.query.limit as string, 10) : undefined;
-    const skip = req.query.skip ? parseInt(req.query.skip as string, 10) : undefined;
+    const limit = req.query.limit
+      ? parseInt(req.query.limit as string, 10)
+      : undefined;
+    const skip = req.query.skip
+      ? parseInt(req.query.skip as string, 10)
+      : undefined;
     const eventTypes = req.query.event_types;
     const event_types = Array.isArray(eventTypes)
-      ? eventTypes as string[]
+      ? (eventTypes as string[])
       : typeof eventTypes === "string"
-        ? eventTypes.split(",").map((s) => s.trim())
-        : undefined;
-    const timeline = await complaintTimelineService.getTimelineByComplaintId(id, {
-      limit,
-      skip,
-      event_types: event_types?.length ? (event_types as ComplaintTimelineEventTypeValue[]) : undefined,
-    });
+      ? eventTypes.split(",").map((s) => s.trim())
+      : undefined;
+    const timeline = await complaintTimelineService.getTimelineByComplaintId(
+      id,
+      {
+        limit,
+        skip,
+        event_types: event_types?.length
+          ? (event_types as ComplaintTimelineEventTypeValue[])
+          : undefined,
+      }
+    );
     sendSuccess(res, timeline);
   } catch (error) {
     next(error);
@@ -194,6 +203,10 @@ export const createComplaint = async (
       village_name: complaintData.village_name || "not provided",
     });
 
+    // When authenticated user (e.g. admin) creates, pass their id so notification can exclude self
+    if (req.user?.id) {
+      complaintData.created_by_user_id = req.user.id;
+    }
     const complaint = await complaintsService.createComplaint(complaintData);
     logger.info(
       `Complaint created successfully: ${complaint.id || complaint._id}`
@@ -591,15 +604,16 @@ export const unassignComplaintSolo = async (
   try {
     const { complaintId } = req.body;
     if (!complaintId || typeof complaintId !== "string") {
-      throw new ValidationError(
-        "complaintId is required and must be a string"
-      );
+      throw new ValidationError("complaintId is required and must be a string");
     }
     const id = complaintId.trim();
     if (!id) {
       throw new ValidationError("complaintId cannot be empty");
     }
-    const complaint = await complaintsService.unassignComplaint(id, req.user?.id);
+    const complaint = await complaintsService.unassignComplaint(
+      id,
+      req.user?.id
+    );
     logger.info(
       `Complaint ${id} unassigned via /unassign by admin ${req.user?.email}`
     );

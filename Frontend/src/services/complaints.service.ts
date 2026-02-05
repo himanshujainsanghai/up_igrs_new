@@ -15,7 +15,55 @@ import {
   ComplaintExtensionRequest,
   ComplaintDocument,
   ComplaintStatistics,
+  ComplaintNotesResponse,
+  ComplaintDocumentsResponse,
 } from "@/types";
+
+/** Map backend admin note (snake_case) to frontend ComplaintNote */
+const mapAdminNote = (n: any): ComplaintNote => ({
+  _id: n._id || n.id,
+  complaintId: n.complaint_id,
+  content: n.note,
+  createdBy: n.created_by,
+  createdAt: n.created_at,
+});
+
+/** Map backend officer note (snake_case) to frontend OfficerNote */
+const mapOfficerNote = (n: any): OfficerNote => ({
+  _id: n._id || n.id,
+  complaintId: n.complaint_id,
+  content: n.note,
+  type: n.type || "inward",
+  attachments: n.attachments,
+  officerId: n.officer_id,
+  createdAt: n.created_at,
+});
+
+/** Map backend admin document (snake_case) to frontend ComplaintDocument */
+const mapAdminDocument = (d: any): ComplaintDocument => ({
+  _id: d._id || d.id,
+  complaintId: d.complaint_id,
+  fileName: d.file_name,
+  fileUrl: d.file_url,
+  fileType: d.file_type,
+  fileSize: d.file_size || 0,
+  uploadedBy: d.uploaded_by,
+  createdAt: d.created_at,
+});
+
+/** Map backend officer document (snake_case) to frontend OfficerAttachment */
+const mapOfficerDocument = (d: any): OfficerAttachment => ({
+  _id: d._id || d.id,
+  complaintId: d.complaint_id,
+  noteId: d.note_id,
+  attachmentType: d.attachment_type,
+  fileUrl: d.file_url,
+  fileName: d.file_name,
+  fileType: d.file_type,
+  fileSize: d.file_size,
+  uploadedBy: d.uploaded_by,
+  createdAt: d.created_at,
+});
 
 /**
  * Map backend complaint (snake_case) to frontend format (camelCase)
@@ -44,6 +92,12 @@ const mapComplaint = (complaint: any): Complaint => {
     voterId: complaint.voter_id || complaint.voterId,
     documents: complaint.documents || [],
     notes: complaint.notes || [],
+    admin_notes: (complaint.admin_notes || []).map(mapAdminNote),
+    officer_notes: (complaint.officer_notes || []).map(mapOfficerNote),
+    admin_documents: (complaint.admin_documents || []).map(mapAdminDocument),
+    officer_documents: (complaint.officer_documents || []).map(
+      mapOfficerDocument
+    ),
     createdAt: complaint.created_at || complaint.createdAt,
     updatedAt: complaint.updated_at || complaint.updatedAt,
     assignedTo: complaint.assigned_to || complaint.assignedTo,
@@ -106,7 +160,7 @@ export const complaintsService = {
    * GET /api/v1/complaints?page=1&limit=20&status=pending&category=roads&search=keyword
    */
   async getComplaints(
-    filters: ComplaintFilters = {},
+    filters: ComplaintFilters = {}
   ): Promise<PaginatedResponse<Complaint>> {
     const params = new URLSearchParams();
 
@@ -135,10 +189,9 @@ export const complaintsService = {
    * Returns all complaints for Badaun district (both "Badaun" and "Budaun" spellings)
    */
   async getBadaunComplaints(): Promise<Complaint[]> {
-    const response =
-      await apiClient.get<
-        ApiResponse<{ count: number; complaints: Complaint[] }>
-      >("/complaints/badaun");
+    const response = await apiClient.get<
+      ApiResponse<{ count: number; complaints: Complaint[] }>
+    >("/complaints/badaun");
 
     if (response.success && response.data) {
       return response.data.complaints || [];
@@ -162,23 +215,27 @@ export const complaintsService = {
   },
 
   /**
-   * Officer: combined complaint detail (complaint + extension requests + notes + attachments)
+   * Officer: combined complaint detail (complaint + extension requests + admin/officer notes + admin/officer documents)
    * GET /api/v1/complaints/officer/complaint/:id
+   * Backend returns segregated admin_notes, officer_notes, admin_documents, officer_attachments.
    */
   async getOfficerComplaintDetail(id: string): Promise<{
     complaint: Complaint;
     extensionRequests: ComplaintExtensionRequest[];
+    adminNotes: ComplaintNote[];
     officerNotes: OfficerNote[];
+    adminDocuments: ComplaintDocument[];
     officerAttachments: OfficerAttachment[];
   }> {
     const response = await apiClient.get<ApiResponse<any>>(
-      `/complaints/officer/complaint/${id}`,
+      `/complaints/officer/complaint/${id}`
     );
     if (response.success && response.data) {
       const data = response.data;
       return {
         complaint: mapComplaint(data.complaint),
         extensionRequests: (data.extension_requests || []).map(mapExtension),
+        adminNotes: (data.admin_notes || []).map(mapAdminNote),
         officerNotes: (data.officer_notes || []).map((note: any) => ({
           _id: note._id || note.id,
           complaintId: note.complaint_id,
@@ -188,6 +245,7 @@ export const complaintsService = {
           officerId: note.officer_id,
           createdAt: note.created_at,
         })),
+        adminDocuments: (data.admin_documents || []).map(mapAdminDocument),
         officerAttachments: (data.officer_attachments || []).map(
           (doc: any) => ({
             _id: doc._id || doc.id,
@@ -200,7 +258,7 @@ export const complaintsService = {
             fileSize: doc.file_size,
             uploadedBy: doc.uploaded_by,
             createdAt: doc.created_at,
-          }),
+          })
         ),
       };
     }
@@ -249,7 +307,7 @@ export const complaintsService = {
 
     const response = await apiClient.post<ApiResponse<Complaint>>(
       "/complaints",
-      backendData,
+      backendData
     );
     return response.data;
   },
@@ -260,11 +318,11 @@ export const complaintsService = {
    */
   async updateComplaint(
     id: string,
-    updates: Partial<Complaint>,
+    updates: Partial<Complaint>
   ): Promise<Complaint> {
     const response = await apiClient.put<ApiResponse<Complaint>>(
       `/complaints/${id}`,
-      updates,
+      updates
     );
     return response.data;
   },
@@ -292,7 +350,7 @@ export const complaintsService = {
       `/complaints/${id}/notes`,
       {
         note: content.trim(), // Backend expects 'note' field, not 'content'
-      },
+      }
     );
     if (response.success && response.data) {
       // Transform backend snake_case to frontend camelCase
@@ -309,25 +367,25 @@ export const complaintsService = {
   },
 
   /**
-   * Get complaint notes
+   * Get complaint notes (segregated: admin vs officer)
    * GET /api/v1/complaints/:id/notes
-   * Backend returns snake_case, transform to camelCase
+   * Backend returns { admin_notes, officer_notes }, transform to camelCase
    */
-  async getNotes(id: string): Promise<ComplaintNote[]> {
-    const response = await apiClient.get<ApiResponse<any[]>>(
-      `/complaints/${id}/notes`,
+  async getNotes(id: string): Promise<ComplaintNotesResponse> {
+    const response = await apiClient.get<ApiResponse<any>>(
+      `/complaints/${id}/notes`
     );
     if (response.success && response.data) {
-      // Transform backend snake_case to frontend camelCase
-      return response.data.map((note: any) => ({
-        _id: note._id || note.id,
-        complaintId: note.complaint_id,
-        content: note.note, // Backend uses 'note' field
-        createdBy: note.created_by,
-        createdAt: note.created_at,
-      }));
+      const data = response.data as {
+        admin_notes?: any[];
+        officer_notes?: any[];
+      };
+      return {
+        adminNotes: (data.admin_notes || []).map(mapAdminNote),
+        officerNotes: (data.officer_notes || []).map(mapOfficerNote),
+      };
     }
-    return [];
+    return { adminNotes: [], officerNotes: [] };
   },
 
   /**
@@ -342,7 +400,7 @@ export const complaintsService = {
       fileUrl: string;
       fileType: string;
       fileSize: number;
-    },
+    }
   ): Promise<ComplaintDocument> {
     // Validate required fields
     if (!document.fileUrl || !document.fileName || !document.fileType) {
@@ -363,7 +421,7 @@ export const complaintsService = {
 
     const response = await apiClient.post<ApiResponse<any>>(
       `/complaints/${id}/documents`,
-      backendData,
+      backendData
     );
     if (response.success && response.data) {
       // Transform backend snake_case to frontend camelCase
@@ -383,28 +441,27 @@ export const complaintsService = {
   },
 
   /**
-   * Get complaint documents
+   * Get complaint documents (segregated: admin vs officer)
    * GET /api/v1/complaints/:id/documents
-   * Backend returns snake_case, transform to camelCase
+   * Backend returns { admin_documents, officer_documents }, transform to camelCase
    */
-  async getDocuments(id: string): Promise<ComplaintDocument[]> {
-    const response = await apiClient.get<ApiResponse<any[]>>(
-      `/complaints/${id}/documents`,
+  async getDocuments(id: string): Promise<ComplaintDocumentsResponse> {
+    const response = await apiClient.get<ApiResponse<any>>(
+      `/complaints/${id}/documents`
     );
     if (response.success && response.data) {
-      // Transform backend snake_case to frontend camelCase
-      return response.data.map((doc: any) => ({
-        _id: doc._id || doc.id,
-        complaintId: doc.complaint_id,
-        fileName: doc.file_name,
-        fileUrl: doc.file_url,
-        fileType: doc.file_type,
-        fileSize: doc.file_size || 0,
-        uploadedBy: doc.uploaded_by,
-        createdAt: doc.created_at,
-      }));
+      const data = response.data as {
+        admin_documents?: any[];
+        officer_documents?: any[];
+      };
+      return {
+        adminDocuments: (data.admin_documents || []).map(mapAdminDocument),
+        officerDocuments: (data.officer_documents || []).map(
+          mapOfficerDocument
+        ),
+      };
     }
-    return [];
+    return { adminDocuments: [], officerDocuments: [] };
   },
 
   /**
@@ -459,7 +516,7 @@ export const complaintsService = {
    */
   async getStatistics(): Promise<ComplaintStatistics> {
     const response = await apiClient.get<ApiResponse<ComplaintStatistics>>(
-      "/complaints/statistics",
+      "/complaints/statistics"
     );
     return response.data;
   },
@@ -485,7 +542,7 @@ export const complaintsService = {
         note: input.note.trim(),
         type: input.type,
         attachments: input.attachments,
-      },
+      }
     );
 
     if (response.success && response.data) {
@@ -509,7 +566,7 @@ export const complaintsService = {
    */
   async getOfficerNotes(complaintId: string): Promise<OfficerNote[]> {
     const response = await apiClient.get<ApiResponse<any[]>>(
-      `/complaints/${complaintId}/officer-notes`,
+      `/complaints/${complaintId}/officer-notes`
     );
 
     if (response.success && response.data) {
@@ -551,7 +608,7 @@ export const complaintsService = {
         file_name: input.fileName,
         file_type: input.fileType,
         note_id: input.noteId,
-      },
+      }
     );
 
     if (response.success && response.data) {
@@ -577,10 +634,10 @@ export const complaintsService = {
    * GET /api/v1/complaints/:id/officer-attachments
    */
   async getOfficerAttachments(
-    complaintId: string,
+    complaintId: string
   ): Promise<OfficerAttachment[]> {
     const response = await apiClient.get<ApiResponse<any[]>>(
-      `/complaints/${complaintId}/officer-attachments`,
+      `/complaints/${complaintId}/officer-attachments`
     );
 
     if (response.success && response.data) {
@@ -606,14 +663,14 @@ export const complaintsService = {
    */
   async requestExtension(
     complaintId: string,
-    input: { days: number; reason?: string },
+    input: { days: number; reason?: string }
   ): Promise<ComplaintExtensionRequest> {
     const response = await apiClient.post<ApiResponse<any>>(
       `/complaints/${complaintId}/officer/extension`,
       {
         days: input.days,
         reason: input.reason,
-      },
+      }
     );
     if (response.success && response.data) {
       const req = response.data;
@@ -650,11 +707,11 @@ export const complaintsService = {
         fileType?: string;
       }>;
       closingProof?: string;
-    },
+    }
   ): Promise<Complaint> {
     const response = await apiClient.post<ApiResponse<Complaint>>(
       `/complaints/${complaintId}/officer/close`,
-      input,
+      input
     );
     return response.data;
   },
@@ -673,7 +730,7 @@ export const complaintsService = {
    */
   async approveExtension(
     complaintId: string,
-    input: { days?: number; notes?: string },
+    input: { days?: number; notes?: string }
   ): Promise<{
     timeBoundary: number;
     extension: ComplaintExtensionRequest;
@@ -687,7 +744,7 @@ export const complaintsService = {
       {
         days: input.days,
         notes: input.notes,
-      },
+      }
     );
 
     if (response.success && response.data) {
@@ -735,13 +792,13 @@ export const complaintsService = {
    */
   async updateComplaintResearch(
     id: string,
-    researchData: any,
+    researchData: any
   ): Promise<Complaint> {
     const response = await apiClient.put<ApiResponse<Complaint>>(
       `/complaints/${id}/research`,
       {
         research_data: researchData,
-      },
+      }
     );
     return response.data;
   },
@@ -758,11 +815,11 @@ export const complaintsService = {
       drafted_letter?: any;
       selected_officer?: any;
       stage1_additional_docs?: string[];
-    },
+    }
   ): Promise<Complaint> {
     const response = await apiClient.put<ApiResponse<Complaint>>(
       `/complaints/${id}/stage1`,
-      stage1Data,
+      stage1Data
     );
     return response.data;
   },
@@ -772,7 +829,7 @@ export const complaintsService = {
    * GET /api/v1/complaints/my-complaints
    */
   async getMyComplaints(
-    filters: ComplaintFilters = {},
+    filters: ComplaintFilters = {}
   ): Promise<PaginatedResponse<Complaint>> {
     const params = new URLSearchParams();
 
@@ -801,7 +858,7 @@ export const complaintsService = {
    */
   async getExecutives(): Promise<any[]> {
     const response = await apiClient.get<ApiResponse<any[]>>(
-      "/complaints/executives",
+      "/complaints/executives"
     );
 
     if (response.success && response.data) {
@@ -816,7 +873,7 @@ export const complaintsService = {
    */
   async sendComplaintEmail(
     id: string,
-    recipientEmail?: string,
+    recipientEmail?: string
   ): Promise<{
     success: boolean;
     messageId: string;
@@ -846,7 +903,7 @@ export const complaintsService = {
    */
   async getEmailHistory(id: string): Promise<any[]> {
     const response = await apiClient.get<ApiResponse<any[]>>(
-      `/complaints/${id}/email-history`,
+      `/complaints/${id}/email-history`
     );
 
     if (response.success && response.data) {
@@ -861,7 +918,7 @@ export const complaintsService = {
    */
   async assignOfficer(
     id: string,
-    executive: any,
+    executive: any
   ): Promise<{
     complaint: Complaint;
     officer: any;
@@ -901,7 +958,7 @@ export const complaintsService = {
   async unassignComplaint(complaintId: string): Promise<Complaint> {
     const response = await apiClient.put<ApiResponse<Complaint>>(
       "/complaints/unassign",
-      { complaintId },
+      { complaintId }
     );
     if (response.success && response.data) {
       return mapComplaint(response.data);
@@ -916,7 +973,7 @@ export const complaintsService = {
    */
   async reassignOfficer(
     id: string,
-    officerId: string,
+    officerId: string
   ): Promise<{ complaint: Complaint; officer: any }> {
     const response = await apiClient.put<
       ApiResponse<{ complaint: Complaint; officer: any }>
@@ -937,7 +994,7 @@ export const complaintsService = {
    */
   async assignOfficerAndSendEmail(
     id: string,
-    executive: any,
+    executive: any
   ): Promise<{
     assignment: {
       complaint: Complaint;
@@ -987,7 +1044,7 @@ export const complaintsService = {
       return response.data;
     }
     throw new Error(
-      response.error?.message || "Failed to assign officer and send email",
+      response.error?.message || "Failed to assign officer and send email"
     );
   },
 };

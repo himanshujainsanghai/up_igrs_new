@@ -9,6 +9,7 @@ import NotificationSettings from "../../models/NotificationSettings";
 import type { TimelineEventLike } from "./types";
 import { isNotifiableEventType } from "./types";
 import { resolveForEvent, buildNotificationInputs } from "./handlers";
+import { emitNewNotificationsToUsers } from "./socket";
 import logger from "../../config/logger";
 
 /**
@@ -83,6 +84,8 @@ export async function handleTimelineEvent(
     logger.debug(
       `Notifications created: ${inputs.length} for ${event_type} complaint=${complaint_id}`
     );
+    const userIds = inputs.map((inp) => inp.user_id);
+    emitNewNotificationsToUsers(userIds);
   } catch (err) {
     logger.error("Notification insertMany failed", {
       event_type,

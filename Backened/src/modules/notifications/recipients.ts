@@ -7,9 +7,26 @@
 import { User } from "../../models/User";
 import { Complaint } from "../../models/Complaint";
 import { ComplaintExtensionRequest } from "../../models/ComplaintExtensionRequest";
+import Officer from "../../models/Officer";
 import logger from "../../config/logger";
 
-/** All active admin user ids (for "admin gets every notification") */
+/** Resolve Officer MongoDB _id to User.id (UUID) for notification routing. */
+export async function getOfficerUserId(
+  officerId: string
+): Promise<string | null> {
+  if (!officerId) return null;
+  try {
+    const officer = await Officer.findById(officerId).select("userId").lean();
+    if (!officer?.userId) return null;
+    const user = await User.findById(officer.userId).select("id").lean();
+    return user?.id ?? null;
+  } catch (err) {
+    logger.error("getOfficerUserId failed", { officerId, err });
+    return null;
+  }
+}
+
+/** All active admin user ids */
 export async function getAllAdminUserIds(): Promise<string[]> {
   try {
     const admins = await User.find({ role: "admin", isActive: true })

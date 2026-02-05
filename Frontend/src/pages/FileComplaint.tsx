@@ -93,7 +93,7 @@ const FileComplaint: React.FC = () => {
 
   // Batch scanning state
   const [scannedDocuments, setScannedDocuments] = useState<ScannedDocument[]>(
-    [],
+    []
   );
   const [processedDocs, setProcessedDocs] = useState<any>(null);
 
@@ -106,7 +106,7 @@ const FileComplaint: React.FC = () => {
 
   // Helper function to get location with reverse geocoding
   const getLocationWithGeocoding = async (
-    position: GeolocationPosition,
+    position: GeolocationPosition
   ): Promise<{
     latitude: number;
     longitude: number;
@@ -120,7 +120,7 @@ const FileComplaint: React.FC = () => {
   }> => {
     try {
       const response = await fetch(
-        `https://us1.locationiq.com/v1/reverse?key=pk.50401737fbb5b194c8b98d17ca08a79f&lat=${position.coords.latitude}&lon=${position.coords.longitude}&format=json`,
+        `https://us1.locationiq.com/v1/reverse?key=pk.50401737fbb5b194c8b98d17ca08a79f&lat=${position.coords.latitude}&lon=${position.coords.longitude}&format=json`
       );
 
       if (!response.ok) {
@@ -195,7 +195,7 @@ const FileComplaint: React.FC = () => {
         location:
           detectedArea ||
           `Lat: ${position.coords.latitude.toFixed(
-            4,
+            4
           )}, Lng: ${position.coords.longitude.toFixed(4)}`,
         city,
         locality,
@@ -211,7 +211,7 @@ const FileComplaint: React.FC = () => {
         latitude: position.coords.latitude,
         longitude: position.coords.longitude,
         location: `Lat: ${position.coords.latitude.toFixed(
-          4,
+          4
         )}, Lng: ${position.coords.longitude.toFixed(4)}`,
         city: "",
         locality: "",
@@ -240,11 +240,11 @@ const FileComplaint: React.FC = () => {
 
             if (locationData.districtName && locationData.subdistrictName) {
               toast.success(
-                "Location detected. Your location has been auto-filled.",
+                "Location detected. Your location has been auto-filled."
               );
             } else {
               toast.warning(
-                "Location detected, but district/subdistrict could not be auto-filled. Please enter manually.",
+                "Location detected, but district/subdistrict could not be auto-filled. Please enter manually."
               );
             }
           } catch (error) {
@@ -258,11 +258,11 @@ const FileComplaint: React.FC = () => {
           console.error("Geolocation error:", error);
           if (error.code === 1) {
             toast.error(
-              "This is a location-based service. Please allow location access to use auto-detect, or enter your location manually.",
+              "This is a location-based service. Please allow location access to use auto-detect, or enter your location manually."
             );
           } else {
             toast.error(
-              "Unable to detect location. Please allow location access or enter manually.",
+              "Unable to detect location. Please allow location access or enter manually."
             );
           }
           setDetectingLocation(false);
@@ -271,11 +271,11 @@ const FileComplaint: React.FC = () => {
           enableHighAccuracy: true,
           timeout: 10000,
           maximumAge: 0,
-        },
+        }
       );
     } else {
       toast.error(
-        "Geolocation is not supported by your browser. Please enter your location manually.",
+        "Geolocation is not supported by your browser. Please enter your location manually."
       );
     }
   };
@@ -334,7 +334,7 @@ const FileComplaint: React.FC = () => {
       // Add scanned file to attachments (avoid duplicates)
       setAttachments((prev) => {
         const alreadyExists = prev.some(
-          (att) => att.file.name === file.name && att.file.size === file.size,
+          (att) => att.file.name === file.name && att.file.size === file.size
         );
         if (alreadyExists) {
           return prev;
@@ -420,13 +420,13 @@ const FileComplaint: React.FC = () => {
           toast.success(
             `Document scanned! ${fieldsUpdated} field${
               fieldsUpdated > 1 ? "s" : ""
-            } auto-filled. File added to attachments.`,
+            } auto-filled. File added to attachments.`
           );
           // Switch to form tab to show the filled data
           setTimeout(() => setActiveTab("form"), 500);
         } else {
           toast.info(
-            "Document processed but no form fields could be auto-filled. File added to attachments.",
+            "Document processed but no form fields could be auto-filled. File added to attachments."
           );
         }
       } else if (result.extractedText || result.text) {
@@ -434,12 +434,12 @@ const FileComplaint: React.FC = () => {
         const extractedText = result.extractedText || result.text;
         setFormData((prev) => ({ ...prev, description: extractedText }));
         toast.success(
-          "Text extracted from document! File added to attachments.",
+          "Text extracted from document! File added to attachments."
         );
         setTimeout(() => setActiveTab("form"), 500);
       } else {
         toast.info(
-          "Document processed. File added to attachments. Please fill the form manually.",
+          "Document processed. File added to attachments. Please fill the form manually."
         );
       }
     } catch (error: any) {
@@ -447,7 +447,7 @@ const FileComplaint: React.FC = () => {
       toast.error(
         error?.response?.data?.message ||
           error?.message ||
-          "Failed to scan document",
+          "Failed to scan document"
       );
     } finally {
       setScanningDocument(false);
@@ -456,7 +456,7 @@ const FileComplaint: React.FC = () => {
 
   // Handle scan file upload for single or batch processing
   const handleScanFileUpload = async (
-    e: React.ChangeEvent<HTMLInputElement>,
+    e: React.ChangeEvent<HTMLInputElement>
   ) => {
     if (!e.target.files || e.target.files.length === 0) return;
 
@@ -552,14 +552,14 @@ const FileComplaint: React.FC = () => {
         (file) => ({
           file,
           preview: URL.createObjectURL(file),
-        }),
+        })
       );
 
       // Add new attachments to existing ones (avoid duplicates)
       setAttachments((prev) => {
         const existingFileNames = new Set(prev.map((att) => att.file.name));
         const uniqueNewAttachments = newAttachments.filter(
-          (att) => !existingFileNames.has(att.file.name),
+          (att) => !existingFileNames.has(att.file.name)
         );
         return [...prev, ...uniqueNewAttachments];
       });
@@ -621,7 +621,7 @@ const FileComplaint: React.FC = () => {
         }
 
         toast.success(
-          `${scannedDocuments.length} document(s) scanned successfully! Form fields have been auto-filled and files added to attachments.`,
+          `${scannedDocuments.length} document(s) scanned successfully! Form fields have been auto-filled and files added to attachments.`
         );
 
         // Switch to form tab to show the filled data
@@ -630,12 +630,12 @@ const FileComplaint: React.FC = () => {
         // If only text is extracted, fill description
         setFormData((prev) => ({ ...prev, description: mergedResult.text }));
         toast.success(
-          "Text extracted from documents! Files added to attachments.",
+          "Text extracted from documents! Files added to attachments."
         );
         setTimeout(() => setActiveTab("form"), 500);
       } else {
         toast.info(
-          "Documents processed. Files added to attachments. Please fill the form manually.",
+          "Documents processed. Files added to attachments. Please fill the form manually."
         );
       }
 
@@ -647,7 +647,7 @@ const FileComplaint: React.FC = () => {
       toast.error(
         error?.response?.data?.message ||
           error?.message ||
-          "Failed to scan documents. Please try again.",
+          "Failed to scan documents. Please try again."
       );
     } finally {
       setScanningDocument(false);
@@ -833,7 +833,7 @@ const FileComplaint: React.FC = () => {
 
     const subdistrictError = validateField(
       "subdistrictName",
-      formData.subdistrictName,
+      formData.subdistrictName
     );
     if (subdistrictError) newErrors.subdistrictName = subdistrictError;
 
@@ -895,7 +895,7 @@ const FileComplaint: React.FC = () => {
     | { ok: false; error: string };
 
   const requestLocationForSubmit = async (
-    currentData: typeof formData,
+    currentData: typeof formData
   ): Promise<LocationRequestResult> => {
     if (!navigator.geolocation) {
       return {
@@ -906,7 +906,7 @@ const FileComplaint: React.FC = () => {
     }
 
     toast.info(
-      "This service requires your location to register your complaint. Please allow location access when prompted.",
+      "This service requires your location to register your complaint. Please allow location access when prompted."
     );
 
     return new Promise((resolve) => {
@@ -944,18 +944,18 @@ const FileComplaint: React.FC = () => {
               String(currentData.subdistrictName || "").trim() !== "";
             if (userHadLocationFilled) {
               toast.success(
-                "Coordinates added. Submitting with your entered location.",
+                "Coordinates added. Submitting with your entered location."
               );
             } else if (
               !updatedData.districtName?.trim() ||
               !updatedData.subdistrictName?.trim()
             ) {
               toast.warning(
-                "Coordinates added. Please enter district and sub-district if still empty.",
+                "Coordinates added. Please enter district and sub-district if still empty."
               );
             } else {
               toast.success(
-                "Location coordinates added. You can now submit your complaint.",
+                "Location coordinates added. You can now submit your complaint."
               );
             }
             resolve({ ok: true, data: updatedData });
@@ -986,7 +986,7 @@ const FileComplaint: React.FC = () => {
             });
           }
         },
-        { enableHighAccuracy: true, timeout: 15000, maximumAge: 0 },
+        { enableHighAccuracy: true, timeout: 15000, maximumAge: 0 }
       );
     });
   };
@@ -1000,7 +1000,7 @@ const FileComplaint: React.FC = () => {
       toast.success("Location captured. You can now submit your complaint.");
     } else if (result.denied) {
       toast.error(
-        "This is a location-based service. Please provide location access to submit your complaint.",
+        "This is a location-based service. Please provide location access to submit your complaint."
       );
     } else {
       toast.error(result.error);
@@ -1073,7 +1073,7 @@ const FileComplaint: React.FC = () => {
         finalFormData = locResult.data;
       } else if (locResult.denied) {
         toast.error(
-          "This is a location-based service. Please provide location access to submit your complaint.",
+          "This is a location-based service. Please provide location access to submit your complaint."
         );
         setShowLocationReaskBanner(true);
         setSubmitting(false);
@@ -1425,10 +1425,10 @@ const FileComplaint: React.FC = () => {
                                     {scannedDocuments.map((doc, index) => (
                                       <div
                                         key={index}
-                                        className="flex items-center gap-2 bg-white rounded p-2 border border-blue-200"
+                                        className="flex items-start gap-2 bg-white rounded p-2 border border-blue-200"
                                       >
-                                        <ImageIcon className="w-4 h-4 text-blue-600 flex-shrink-0" />
-                                        <span className="text-xs text-gray-700 flex-1 truncate">
+                                        <ImageIcon className="w-4 h-4 text-blue-600 flex-shrink-0 mt-0.5" />
+                                        <span className="text-xs text-gray-700 flex-1 break-words">
                                           {doc.name}
                                         </span>
                                         <button
@@ -1436,7 +1436,7 @@ const FileComplaint: React.FC = () => {
                                           onClick={() =>
                                             handleRemoveScannedDocument(index)
                                           }
-                                          className="p-1 hover:bg-red-100 rounded text-red-600"
+                                          className="p-1 hover:bg-red-100 rounded text-red-600 flex-shrink-0"
                                         >
                                           <X className="w-3 h-3" />
                                         </button>
@@ -1997,8 +1997,8 @@ const FileComplaint: React.FC = () => {
                             formData.description.length < 20
                               ? "text-yellow-600"
                               : formData.description.length > 5000
-                                ? "text-red-500"
-                                : "text-gray-500"
+                              ? "text-red-500"
+                              : "text-gray-500"
                           }`}
                         >
                           {formData.description.length}/5000 characters (minimum
@@ -2094,9 +2094,9 @@ const FileComplaint: React.FC = () => {
                                   <div className="absolute inset-0 bg-black/0 group-hover:bg-black/20 rounded-lg transition-colors" />
                                 </div>
                               ) : (
-                                <div className="w-full h-24 border-2 border-gray-200 rounded-lg flex flex-col items-center justify-center bg-gradient-to-br from-gray-50 to-gray-100 shadow-sm">
-                                  <FileText className="w-6 h-6 text-gray-600 mb-1" />
-                                  <span className="text-xs text-gray-600 truncate px-1">
+                                <div className="w-full h-24 border-2 border-gray-200 rounded-lg flex flex-col items-center justify-center bg-gradient-to-br from-gray-50 to-gray-100 shadow-sm p-2">
+                                  <FileText className="w-6 h-6 text-gray-600 mb-1 flex-shrink-0" />
+                                  <span className="text-xs text-gray-600 text-center break-words line-clamp-2 w-full">
                                     {attachment.file.name}
                                   </span>
                                 </div>

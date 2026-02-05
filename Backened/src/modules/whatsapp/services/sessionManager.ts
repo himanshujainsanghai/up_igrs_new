@@ -3,6 +3,7 @@ import { serializeErrorForLog } from "../../../utils/errors";
 import {
   processChatMessage,
   FIRST_COMPLAINT_PROMPT,
+  getPromptForField,
 } from "../conversation/stateMachine";
 import { getTrackingReplies } from "../conversation/trackHandler";
 import { templates, STALE_SESSION_MS } from "../conversation/templates";
@@ -15,6 +16,7 @@ import {
   WhatsAppSession,
   ComplaintCreateResult,
 } from "../types";
+import { runAiParseJob } from "./aiParseJob";
 
 /** Result from session manager: what to send and whether to persist. */
 export interface SessionManagerResult {
@@ -163,18 +165,18 @@ export async function handleIncomingMessage(
     };
   }
 
-  // 4. Cancel: reset to START
+  // 4. Cancel: clear session so user starts fresh; show menu again.
+  // If they continue, next message will create a new session and they'll pick intent again.
   if (isCancelKeyword(message.text)) {
-    resetToStart(session);
-    logger.info("User session reset (cancel)", {
+    logger.info("User session cleared (cancel)", {
       service: "grievance-aid-backend",
       from,
     });
     return {
-      replies: [templates.cancel],
-      session,
-      saveSession: true,
-      endSession: false,
+      replies: [templates.cancel + templates.welcomeIntent],
+      session: createNewSession(from),
+      saveSession: false,
+      endSession: true,
     };
   }
 
@@ -205,9 +207,9 @@ export async function handleIncomingMessage(
       };
     }
     if (intent === "file") {
-      session.state = "COLLECT_BASICS";
+      session.state = "COLLECT_FILE_MODE";
       return {
-        replies: [FIRST_COMPLAINT_PROMPT],
+        replies: [templates.askFileMode],
         session,
         saveSession: true,
         endSession: false,
@@ -270,6 +272,38 @@ export async function handleIncomingMessage(
     }
   }
 
+  // 6b. File mode choice (A = describe in one go, B = step-by-step)
+  if (session.intent === "file" && session.state === "COLLECT_FILE_MODE") {
+    const t = (message.text || "").trim().toLowerCase();
+    if (t === "a" || t === "ai" || t === "1a") {
+      session.fileMode = "ai";
+      session.state = "COLLECT_FREE_FORM";
+      session.freeFormTextBuffer = undefined;
+      return {
+        replies: [templates.askFreeForm],
+        session,
+        saveSession: true,
+        endSession: false,
+      };
+    }
+    if (t === "b" || t === "step" || t === "1b") {
+      session.fileMode = "step";
+      session.state = "COLLECT_BASICS";
+      return {
+        replies: [FIRST_COMPLAINT_PROMPT],
+        session,
+        saveSession: true,
+        endSession: false,
+      };
+    }
+    return {
+      replies: [templates.invalidFileMode, templates.askFileMode],
+      session,
+      saveSession: false,
+      endSession: false,
+    };
+  }
+
   // 7. File complaint: handle media then state machine
   if (session.intent === "file") {
     if (
@@ -322,6 +356,29 @@ export async function handleIncomingMessage(
 
     try {
       const result = await processChatMessage(message, session);
+      let outSession = result.session;
+
+      if (
+        outSession.state === "COLLECT_FREE_FORM" &&
+        (message.text || "").trim().toLowerCase() === "done"
+      ) {
+        const hasContent =
+          (outSession.freeFormTextBuffer ?? "").trim().length >= 20 ||
+          (outSession.data.images?.length ?? 0) > 0 ||
+          (outSession.data.documents?.length ?? 0) > 0;
+        if (!hasContent) {
+          return {
+            replies: [templates.freeFormDoneMinContent],
+            session: outSession,
+            saveSession: true,
+            endSession: false,
+          };
+        }
+        outSession.state = "AI_PROCESSING";
+        outSession.aiRequestedAt = Date.now();
+        setImmediate(() => runAiParseJob(from));
+      }
+
       const replies = [...result.replies];
       if (result.endSession) {
         logger.info("User session terminated", {
@@ -334,7 +391,7 @@ export async function handleIncomingMessage(
       }
       return {
         replies,
-        session: result.session,
+        session: outSession,
         saveSession: true,
         endSession: Boolean(result.endSession),
         complaintCreated: result.complaintCreated,

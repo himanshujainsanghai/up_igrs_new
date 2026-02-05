@@ -89,10 +89,17 @@ import {
 } from "@/components/ui/accordion";
 import { complaintsService } from "@/services/complaints.service";
 import { uploadService } from "@/services/upload.service";
-import { Complaint, ComplaintNote, ComplaintDocument } from "@/types";
+import {
+  Complaint,
+  ComplaintNote,
+  ComplaintDocument,
+  OfficerNote,
+  OfficerAttachment,
+} from "@/types";
 import { toast } from "sonner";
 import ComplaintTimeline from "@/components/complaints/ComplaintTimeline";
 import DocumentSummaryPanel from "@/components/complaints/DocumentSummaryPanel";
+import { ExecutiveSelectRadioGroup } from "@/components/complaints/ExecutiveSelectRadioGroup";
 import {
   notesUtils,
   documentsUtils,
@@ -236,9 +243,13 @@ const ComplaintDetailPage: React.FC = () => {
   const [loading, setLoading] = useState(true);
   const [activeTab, setActiveTab] = useState("details");
 
-  // Notes & Documents
-  const [notes, setNotes] = useState<ComplaintNote[]>([]);
-  const [documents, setDocuments] = useState<ComplaintDocument[]>([]);
+  // Notes & Documents (segregated: admin vs officer)
+  const [adminNotes, setAdminNotes] = useState<ComplaintNote[]>([]);
+  const [officerNotes, setOfficerNotes] = useState<OfficerNote[]>([]);
+  const [adminDocuments, setAdminDocuments] = useState<ComplaintDocument[]>([]);
+  const [officerDocuments, setOfficerDocuments] = useState<OfficerAttachment[]>(
+    []
+  );
   const [newNote, setNewNote] = useState("");
   const [isAddingNote, setIsAddingNote] = useState(false);
   const [newDocumentFile, setNewDocumentFile] = useState<File | null>(null);
@@ -303,6 +314,11 @@ const ComplaintDetailPage: React.FC = () => {
   const [showUnassignModal, setShowUnassignModal] = useState(false);
   const [showChangeOfficerModal, setShowChangeOfficerModal] = useState(false);
   const [showChangeOfficerSelect, setShowChangeOfficerSelect] = useState(false);
+  /** When true, show officer selection in Actions tab to change selected officer before assigning (letter drafted, not yet assigned) */
+  const [
+    showChangeSelectedOfficerBeforeAssign,
+    setShowChangeSelectedOfficerBeforeAssign,
+  ] = useState(false);
   const [assignmentResult, setAssignmentResult] = useState<{
     isNewOfficer: boolean;
     user?: {
@@ -381,6 +397,12 @@ const ComplaintDetailPage: React.FC = () => {
       console.log("Is Officer Assigned:", (data as any).isOfficerAssigned);
       setComplaint(data);
 
+      // Set segregated notes & documents from complaint response
+      setAdminNotes((data as any).admin_notes ?? []);
+      setOfficerNotes((data as any).officer_notes ?? []);
+      setAdminDocuments((data as any).admin_documents ?? []);
+      setOfficerDocuments((data as any).officer_documents ?? []);
+
       // Load saved research data
       const savedResearch = researchUtils.loadSavedResearch(data);
       if (savedResearch) {
@@ -433,13 +455,15 @@ const ComplaintDetailPage: React.FC = () => {
   const loadNotes = async () => {
     if (!id) return;
     const data = await notesUtils.loadNotes(id);
-    setNotes(data);
+    setAdminNotes(data.adminNotes);
+    setOfficerNotes(data.officerNotes);
   };
 
   const loadDocuments = async () => {
     if (!id) return;
     const data = await documentsUtils.loadDocuments(id);
-    setDocuments(data);
+    setAdminDocuments(data.adminDocuments);
+    setOfficerDocuments(data.officerDocuments);
   };
 
   const handleAddNote = async () => {
@@ -932,6 +956,41 @@ const ComplaintDetailPage: React.FC = () => {
       toast.error(error?.message || "Failed to change assigned officer");
     } finally {
       setChangingOfficer(false);
+    }
+  };
+
+  /** Open "change selected officer" UI in Actions tab (letter drafted, not yet assigned) */
+  const handleChangeSelectedOfficerBeforeAssignOpen = () => {
+    setShowChangeSelectedOfficerBeforeAssign(true);
+    loadAssignmentExecutives();
+  };
+
+  /** Update recipient only (selected_officer + letter To) when changing before assign */
+  const handleUpdateRecipientBeforeAssign = async () => {
+    if (!id) return;
+    const letter = (complaint as any)?.drafted_letter;
+    if (!letter) {
+      toast.error("Drafted letter not found.");
+      return;
+    }
+    const selectedExecutive =
+      assignmentExecutives[selectedAssignmentExecutiveIndex];
+    if (!selectedExecutive || selectedAssignmentExecutiveIndex < 0) {
+      toast.error("Please select an officer.");
+      return;
+    }
+    try {
+      setUpdatingRecipient(true);
+      await draftLetterUtils.updateRecipient(id, letter, selectedExecutive);
+      await loadComplaint();
+      setShowChangeSelectedOfficerBeforeAssign(false);
+      toast.success(
+        'Selected officer updated. Letter "To" field has been updated.'
+      );
+    } catch (error: any) {
+      // toast handled in updateRecipient
+    } finally {
+      setUpdatingRecipient(false);
     }
   };
 
@@ -1674,30 +1733,62 @@ const ComplaintDetailPage: React.FC = () => {
                   </div>
                 )}
 
-              {/* Documents */}
-              {complaint.documents && complaint.documents.length > 0 && (
+              {/* Documents (admin + officer from segregated state) */}
+              {(adminDocuments.length > 0 || officerDocuments.length > 0) && (
                 <div className="space-y-3">
                   <h3 className="text-sm font-semibold text-foreground uppercase tracking-wide border-b pb-2">
-                    Documents ({complaint.documents.length})
+                    Documents ({adminDocuments.length + officerDocuments.length}
+                    )
                   </h3>
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                    {complaint.documents.map((doc, index) => (
+                    {adminDocuments.map((doc, index) => (
                       <button
-                        key={index}
+                        key={`admin-${doc._id}`}
                         type="button"
                         onClick={() => handleViewDocument(doc.fileUrl)}
-                        className="flex items-center gap-3 p-3 border border-[#011a60]/30 rounded-lg hover:border-[#011a60]/60 transition-all w-full text-left"
+                        className="flex items-center gap-3 p-3 border border-orange-200 rounded-lg hover:border-orange-400 transition-all w-full text-left bg-orange-50/30"
                       >
                         <FileText className="w-5 h-5 text-foreground" />
                         <div className="flex-1 min-w-0">
                           <p className="text-sm font-medium text-foreground truncate">
                             {doc.fileName || `Document ${index + 1}`}
                           </p>
-                          {doc.fileType && (
-                            <p className="text-xs text-muted-foreground">
-                              {doc.fileType}
-                            </p>
-                          )}
+                          <div className="flex items-center gap-2 mt-1">
+                            {doc.fileType && (
+                              <span className="text-xs text-muted-foreground">
+                                {doc.fileType}
+                              </span>
+                            )}
+                            <Badge className="bg-orange-500 text-white text-[10px] px-1.5">
+                              Admin
+                            </Badge>
+                          </div>
+                        </div>
+                        <ExternalLink className="w-4 h-4 text-muted-foreground" />
+                      </button>
+                    ))}
+                    {officerDocuments.map((doc, index) => (
+                      <button
+                        key={`officer-${doc._id}`}
+                        type="button"
+                        onClick={() => handleViewDocument(doc.fileUrl)}
+                        className="flex items-center gap-3 p-3 border border-[#011a60]/30 rounded-lg hover:border-[#011a60]/60 transition-all w-full text-left bg-[#011a60]/5"
+                      >
+                        <FileText className="w-5 h-5 text-foreground" />
+                        <div className="flex-1 min-w-0">
+                          <p className="text-sm font-medium text-foreground truncate">
+                            {doc.fileName || `Document ${index + 1}`}
+                          </p>
+                          <div className="flex items-center gap-2 mt-1">
+                            {doc.attachmentType && (
+                              <span className="text-xs text-muted-foreground">
+                                {doc.attachmentType}
+                              </span>
+                            )}
+                            <Badge className="bg-[#011a60] text-white text-[10px] px-1.5">
+                              Officer
+                            </Badge>
+                          </div>
                         </div>
                         <ExternalLink className="w-4 h-4 text-muted-foreground" />
                       </button>
@@ -1805,81 +1896,140 @@ const ComplaintDetailPage: React.FC = () => {
             </CardContent>
           </Card>
 
-          {/* Notes History - Timeline Design */}
+          {/* Notes History - Segregated: Admin (orange) & Officer (navy) */}
           <Card className="border-orange-200 shadow-md">
             <CardHeader className="bg-gradient-to-r from-orange-50 to-amber-50 border-b border-orange-200">
-              <div className="flex items-center justify-between">
-                <div className="flex items-center gap-2">
-                  <div className="p-2 bg-primary/10 rounded-lg">
-                    <FileText className="w-5 h-5 text-primary" />
-                  </div>
-                  <CardTitle className="text-xl">Notes History</CardTitle>
+              <div className="flex items-center gap-2">
+                <div className="p-2 bg-primary/10 rounded-lg">
+                  <FileText className="w-5 h-5 text-primary" />
                 </div>
-                {notes.length > 0 && (
-                  <Badge variant="outline" className="bg-white">
-                    {notes.length} {notes.length === 1 ? "note" : "notes"}
-                  </Badge>
-                )}
+                <CardTitle className="text-xl">Notes History</CardTitle>
               </div>
             </CardHeader>
-            <CardContent className="p-6">
-              {notes.length > 0 ? (
-                <div className="relative">
-                  {/* Timeline line */}
-                  <div className="absolute left-4 top-0 bottom-0 w-0.5 bg-gradient-to-b from-primary/20 via-primary/30 to-transparent"></div>
-
-                  <div className="space-y-6">
-                    {notes.map((note, index) => (
+            <CardContent className="p-6 space-y-8">
+              {/* Admin Notes - Orange */}
+              <div>
+                <div className="flex items-center gap-2 mb-4">
+                  <Badge className="bg-orange-500 hover:bg-orange-600 text-white border-0">
+                    Admin
+                  </Badge>
+                  <span className="text-sm text-muted-foreground">
+                    {adminNotes.length}{" "}
+                    {adminNotes.length === 1 ? "note" : "notes"}
+                  </span>
+                </div>
+                {adminNotes.length > 0 ? (
+                  <div className="relative space-y-4">
+                    <div className="absolute left-4 top-0 bottom-0 w-0.5 bg-orange-200 rounded-full" />
+                    {adminNotes.map((note) => (
                       <div
                         key={note._id || (note as any).id}
                         className="relative pl-12"
                       >
-                        {/* Timeline dot */}
-                        <div className="absolute left-0 top-1.5 w-8 h-8 rounded-full bg-gradient-to-br from-primary to-orange-500 border-4 border-background shadow-md flex items-center justify-center">
+                        <div className="absolute left-0 top-1.5 w-8 h-8 rounded-full bg-orange-500 border-4 border-background shadow flex items-center justify-center">
                           <MessageCircle className="w-3 h-3 text-white" />
                         </div>
-
-                        {/* Note content */}
-                        <div className="bg-gradient-to-br from-white to-orange-50/30 border border-orange-200 rounded-xl p-4 shadow-sm hover:shadow-md transition-all duration-200">
-                          <p className="text-sm text-foreground whitespace-pre-wrap leading-relaxed">
+                        <div className="bg-orange-50/50 border border-orange-200 rounded-xl p-4 shadow-sm">
+                          <p className="text-sm text-foreground whitespace-pre-wrap">
                             {note.content || (note as any).note}
                           </p>
                           <div className="flex items-center justify-between mt-3 pt-3 border-t border-orange-100">
-                            <div className="flex items-center gap-2">
-                              <Clock className="w-3 h-3 text-muted-foreground" />
-                              <p className="text-xs text-muted-foreground">
-                                {note.createdAt
-                                  ? new Date(note.createdAt).toLocaleString()
-                                  : "Invalid Date"}
-                              </p>
-                            </div>
+                            <span className="text-xs text-muted-foreground flex items-center gap-1">
+                              <Clock className="w-3 h-3" />
+                              {note.createdAt
+                                ? new Date(note.createdAt).toLocaleString()
+                                : "—"}
+                            </span>
                             {note.createdBy && (
-                              <div className="flex items-center gap-2">
-                                <User className="w-3 h-3 text-muted-foreground" />
-                                <p className="text-xs text-muted-foreground font-medium">
-                                  {note.createdBy}
-                                </p>
-                              </div>
+                              <span className="text-xs text-muted-foreground font-medium flex items-center gap-1">
+                                <User className="w-3 h-3" />
+                                {note.createdBy}
+                              </span>
                             )}
                           </div>
                         </div>
                       </div>
                     ))}
                   </div>
+                ) : (
+                  <p className="text-sm text-muted-foreground py-4 pl-2">
+                    No admin notes yet
+                  </p>
+                )}
+              </div>
+
+              {/* Officer Notes - Navy */}
+              <div>
+                <div className="flex items-center gap-2 mb-4">
+                  <Badge className="bg-[#011a60] hover:bg-[#011a60]/90 text-white border-0">
+                    Officer
+                  </Badge>
+                  <span className="text-sm text-muted-foreground">
+                    {officerNotes.length}{" "}
+                    {officerNotes.length === 1 ? "note" : "notes"}
+                  </span>
                 </div>
-              ) : (
-                <div className="text-center py-12">
-                  <div className="w-16 h-16 mx-auto mb-4 rounded-full bg-gradient-to-br from-orange-100 to-amber-100 flex items-center justify-center">
-                    <MessageCircle className="w-8 h-8 text-orange-400" />
+                {officerNotes.length > 0 ? (
+                  <div className="relative space-y-4">
+                    <div className="absolute left-4 top-0 bottom-0 w-0.5 bg-[#011a60]/30 rounded-full" />
+                    {officerNotes.map((note) => (
+                      <div
+                        key={note._id || (note as any).id}
+                        className="relative pl-12"
+                      >
+                        <div className="absolute left-0 top-1.5 w-8 h-8 rounded-full bg-[#011a60] border-4 border-background shadow flex items-center justify-center">
+                          <MessageCircle className="w-3 h-3 text-white" />
+                        </div>
+                        <div className="bg-[#011a60]/5 border border-[#011a60]/30 rounded-xl p-4 shadow-sm">
+                          <div className="flex items-center gap-2 mb-2">
+                            <Badge
+                              variant="outline"
+                              className={
+                                note.type === "inward"
+                                  ? "border-blue-600 text-blue-700 bg-blue-50"
+                                  : "border-green-600 text-green-700 bg-green-50"
+                              }
+                            >
+                              {note.type === "inward" ? "Inward" : "Outward"}
+                            </Badge>
+                          </div>
+                          <p className="text-sm text-foreground whitespace-pre-wrap">
+                            {note.content}
+                          </p>
+                          <div className="flex items-center justify-between mt-3 pt-3 border-t border-[#011a60]/10">
+                            <span className="text-xs text-muted-foreground flex items-center gap-1">
+                              <Clock className="w-3 h-3" />
+                              {note.createdAt
+                                ? new Date(note.createdAt).toLocaleString()
+                                : "—"}
+                            </span>
+                          </div>
+                          {note.attachments && note.attachments.length > 0 && (
+                            <div className="mt-2 flex flex-wrap gap-2">
+                              {note.attachments.map((url, idx) => (
+                                <Button
+                                  key={idx}
+                                  variant="outline"
+                                  size="sm"
+                                  className="h-7 text-xs"
+                                  onClick={() => handleViewDocument(url)}
+                                >
+                                  <ExternalLink className="w-3 h-3 mr-1" />
+                                  Attachment {idx + 1}
+                                </Button>
+                              ))}
+                            </div>
+                          )}
+                        </div>
+                      </div>
+                    ))}
                   </div>
-                  <p className="text-sm font-medium text-muted-foreground mb-1">
-                    No notes yet
+                ) : (
+                  <p className="text-sm text-muted-foreground py-4 pl-2">
+                    No officer notes yet
                   </p>
-                  <p className="text-xs text-muted-foreground">
-                    Start adding notes to track updates and communications
-                  </p>
-                </div>
-              )}
+                )}
+              </div>
             </CardContent>
           </Card>
 
@@ -1979,110 +2129,196 @@ const ComplaintDetailPage: React.FC = () => {
             </CardContent>
           </Card>
 
-          {/* Documents History - Modern Grid Design */}
+          {/* Documents History - Segregated: Admin (orange) & Officer (navy) */}
           <Card className="border-orange-200 shadow-md">
             <CardHeader className="bg-gradient-to-r from-orange-50 to-amber-50 border-b border-orange-200">
-              <div className="flex items-center justify-between">
-                <div className="flex items-center gap-2">
-                  <div className="p-2 bg-primary/10 rounded-lg">
-                    <FileDown className="w-5 h-5 text-primary" />
-                  </div>
-                  <CardTitle className="text-xl">Documents History</CardTitle>
+              <div className="flex items-center gap-2">
+                <div className="p-2 bg-primary/10 rounded-lg">
+                  <FileDown className="w-5 h-5 text-primary" />
                 </div>
-                {documents.length > 0 && (
-                  <Badge variant="outline" className="bg-white">
-                    {documents.length}{" "}
-                    {documents.length === 1 ? "document" : "documents"}
-                  </Badge>
-                )}
+                <CardTitle className="text-xl">Documents History</CardTitle>
               </div>
             </CardHeader>
-            <CardContent className="p-6">
-              {documents.length > 0 ? (
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  {documents.map((doc) => {
-                    const isPdf =
-                      doc.fileName?.toLowerCase().endsWith(".pdf") ||
-                      doc.fileUrl?.toLowerCase().includes(".pdf");
-                    const isImage = /\.(jpg|jpeg|png|gif|webp)$/i.test(
-                      doc.fileName || ""
-                    );
-
-                    return (
-                      <div
-                        key={doc._id}
-                        className="group relative bg-gradient-to-br from-white to-orange-50/30 border border-orange-200 rounded-xl p-4 hover:shadow-lg transition-all duration-200 hover:border-primary/50"
-                      >
-                        <div className="flex items-start gap-3">
-                          <div
-                            className={`p-2 rounded-lg ${
-                              isPdf
-                                ? "bg-red-100"
-                                : isImage
-                                ? "bg-blue-100"
-                                : "bg-gray-100"
-                            }`}
-                          >
-                            {isPdf ? (
-                              <FileText className="w-5 h-5 text-red-600" />
-                            ) : isImage ? (
-                              <FileText className="w-5 h-5 text-blue-600" />
-                            ) : (
-                              <FileText className="w-5 h-5 text-gray-600" />
-                            )}
-                          </div>
-                          <div className="flex-1 min-w-0">
-                            <div className="block hover:text-primary transition-colors">
-                              <p className="text-sm font-semibold truncate mb-1">
-                                {doc.fileName}
-                              </p>
-                              {doc.createdAt && (
-                                <p className="text-xs text-muted-foreground flex items-center gap-1">
-                                  <Clock className="w-3 h-3" />
-                                  {new Date(doc.createdAt).toLocaleString()}
-                                </p>
+            <CardContent className="p-6 space-y-8">
+              {/* Admin Documents - Orange */}
+              <div>
+                <div className="flex items-center gap-2 mb-4">
+                  <Badge className="bg-orange-500 hover:bg-orange-600 text-white border-0">
+                    Admin
+                  </Badge>
+                  <span className="text-sm text-muted-foreground">
+                    {adminDocuments.length}{" "}
+                    {adminDocuments.length === 1 ? "document" : "documents"}
+                  </span>
+                </div>
+                {adminDocuments.length > 0 ? (
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    {adminDocuments.map((doc) => {
+                      const isPdf =
+                        doc.fileName?.toLowerCase().endsWith(".pdf") ||
+                        doc.fileUrl?.toLowerCase().includes(".pdf");
+                      const isImage = /\.(jpg|jpeg|png|gif|webp)$/i.test(
+                        doc.fileName || ""
+                      );
+                      return (
+                        <div
+                          key={doc._id}
+                          className="bg-orange-50/50 border border-orange-200 rounded-xl p-4 hover:shadow-md transition-all"
+                        >
+                          <div className="flex items-start gap-3">
+                            <div
+                              className={`p-2 rounded-lg shrink-0 ${
+                                isPdf
+                                  ? "bg-red-100"
+                                  : isImage
+                                  ? "bg-blue-100"
+                                  : "bg-gray-100"
+                              }`}
+                            >
+                              {isPdf ? (
+                                <FileText className="w-5 h-5 text-red-600" />
+                              ) : isImage ? (
+                                <FileText className="w-5 h-5 text-blue-600" />
+                              ) : (
+                                <FileText className="w-5 h-5 text-gray-600" />
                               )}
                             </div>
-                            <div className="flex items-center gap-2 mt-2">
-                              <Badge
-                                variant="outline"
-                                className={`capitalize text-xs ${
-                                  doc.fileType === "inward"
-                                    ? "bg-blue-50 text-blue-700 border-blue-200"
-                                    : "bg-green-50 text-green-700 border-green-200"
-                                }`}
-                              >
-                                {doc.fileType}
-                              </Badge>
-                              <Button
-                                variant="ghost"
-                                size="sm"
-                                onClick={() => handleViewDocument(doc.fileUrl)}
-                                className="h-7 px-2 text-xs"
-                              >
-                                <ExternalLink className="w-3 h-3 mr-1" />
-                                View
-                              </Button>
+                            <div className="flex-1 min-w-0">
+                              <p className="text-sm font-semibold truncate">
+                                {doc.fileName}
+                              </p>
+                              <p className="text-xs text-muted-foreground mt-1 flex items-center gap-1">
+                                <Clock className="w-3 h-3" />
+                                {doc.createdAt
+                                  ? new Date(doc.createdAt).toLocaleString()
+                                  : "—"}
+                              </p>
+                              <div className="flex items-center gap-2 mt-2">
+                                <Badge
+                                  variant="outline"
+                                  className={`text-xs ${
+                                    doc.fileType === "inward"
+                                      ? "bg-blue-50 text-blue-700 border-blue-200"
+                                      : "bg-green-50 text-green-700 border-green-200"
+                                  }`}
+                                >
+                                  {doc.fileType}
+                                </Badge>
+                                <Button
+                                  variant="ghost"
+                                  size="sm"
+                                  onClick={() =>
+                                    handleViewDocument(doc.fileUrl)
+                                  }
+                                  className="h-7 px-2 text-xs"
+                                >
+                                  <ExternalLink className="w-3 h-3 mr-1" />
+                                  View
+                                </Button>
+                              </div>
                             </div>
                           </div>
                         </div>
-                      </div>
-                    );
-                  })}
-                </div>
-              ) : (
-                <div className="text-center py-12">
-                  <div className="w-16 h-16 mx-auto mb-4 rounded-full bg-gradient-to-br from-orange-100 to-amber-100 flex items-center justify-center">
-                    <FileText className="w-8 h-8 text-orange-400" />
+                      );
+                    })}
                   </div>
-                  <p className="text-sm font-medium text-muted-foreground mb-1">
-                    No documents yet
+                ) : (
+                  <p className="text-sm text-muted-foreground py-4">
+                    No admin documents yet
                   </p>
-                  <p className="text-xs text-muted-foreground">
-                    Upload documents or images to track related files
-                  </p>
+                )}
+              </div>
+
+              {/* Officer Documents - Navy */}
+              <div>
+                <div className="flex items-center gap-2 mb-4">
+                  <Badge className="bg-[#011a60] hover:bg-[#011a60]/90 text-white border-0">
+                    Officer
+                  </Badge>
+                  <span className="text-sm text-muted-foreground">
+                    {officerDocuments.length}{" "}
+                    {officerDocuments.length === 1 ? "document" : "documents"}
+                  </span>
                 </div>
-              )}
+                {officerDocuments.length > 0 ? (
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    {officerDocuments.map((doc) => {
+                      const isPdf =
+                        doc.fileName?.toLowerCase().endsWith(".pdf") ||
+                        doc.fileUrl?.toLowerCase().includes(".pdf");
+                      const isImage = /\.(jpg|jpeg|png|gif|webp)$/i.test(
+                        doc.fileName || ""
+                      );
+                      const direction =
+                        doc.attachmentType === "inward" ? "inward" : "outward";
+                      return (
+                        <div
+                          key={doc._id}
+                          className="bg-[#011a60]/5 border border-[#011a60]/30 rounded-xl p-4 hover:shadow-md transition-all"
+                        >
+                          <div className="flex items-start gap-3">
+                            <div
+                              className={`p-2 rounded-lg shrink-0 ${
+                                isPdf
+                                  ? "bg-red-100"
+                                  : isImage
+                                  ? "bg-blue-100"
+                                  : "bg-gray-100"
+                              }`}
+                            >
+                              {isPdf ? (
+                                <FileText className="w-5 h-5 text-red-600" />
+                              ) : isImage ? (
+                                <FileText className="w-5 h-5 text-blue-600" />
+                              ) : (
+                                <FileText className="w-5 h-5 text-gray-600" />
+                              )}
+                            </div>
+                            <div className="flex-1 min-w-0">
+                              <p className="text-sm font-semibold truncate">
+                                {doc.fileName}
+                              </p>
+                              <p className="text-xs text-muted-foreground mt-1 flex items-center gap-1">
+                                <Clock className="w-3 h-3" />
+                                {doc.createdAt
+                                  ? new Date(doc.createdAt).toLocaleString()
+                                  : "—"}
+                              </p>
+                              <div className="flex items-center gap-2 mt-2">
+                                <Badge
+                                  variant="outline"
+                                  className={`text-xs ${
+                                    direction === "inward"
+                                      ? "bg-blue-50 text-blue-700 border-blue-200"
+                                      : "bg-green-50 text-green-700 border-green-200"
+                                  }`}
+                                >
+                                  {direction}
+                                </Badge>
+                                <Button
+                                  variant="ghost"
+                                  size="sm"
+                                  onClick={() =>
+                                    handleViewDocument(doc.fileUrl)
+                                  }
+                                  className="h-7 px-2 text-xs"
+                                >
+                                  <ExternalLink className="w-3 h-3 mr-1" />
+                                  View
+                                </Button>
+                              </div>
+                            </div>
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                ) : (
+                  <p className="text-sm text-muted-foreground py-4">
+                    No officer documents yet
+                  </p>
+                )}
+              </div>
             </CardContent>
           </Card>
         </TabsContent>
@@ -2685,52 +2921,14 @@ const ComplaintDetailPage: React.FC = () => {
                     </div>
                   ) : (
                     <>
-                      <Label className="font-semibold text-foreground mb-2 block">
-                        Select new recipient ({executives.length} available):
-                      </Label>
-                      <div className="relative w-full min-w-0 overflow-x-auto scrollbar-hide pb-4">
-                        <RadioGroup
-                          value={selectedExecutiveIndex.toString()}
-                          onValueChange={(v) =>
-                            setSelectedExecutiveIndex(parseInt(v))
-                          }
-                          className="inline-block min-w-0"
-                          aria-label="Select new recipient"
-                        >
-                          <div className="flex gap-4 w-max">
-                            {executives.map((exec: any, index: number) => (
-                              <div
-                                key={index}
-                                className="w-[320px] flex-shrink-0"
-                              >
-                                <RadioGroupItem
-                                  value={index.toString()}
-                                  id={`change-exec-${index}`}
-                                  className="peer sr-only"
-                                  aria-hidden
-                                />
-                                <Label
-                                  htmlFor={`change-exec-${index}`}
-                                  className="flex flex-col p-4 border-2 rounded-xl cursor-pointer hover:bg-muted/50 transition-all peer-data-[state=checked]:border-primary peer-data-[state=checked]:ring-2 peer-data-[state=checked]:ring-primary/20 h-full"
-                                >
-                                  <div className="font-semibold text-foreground">
-                                    {exec.name || "Unknown"}
-                                  </div>
-                                  <div className="text-sm text-muted-foreground">
-                                    {exec.designation}
-                                    {exec.district ? ` - ${exec.district}` : ""}
-                                  </div>
-                                  {exec.email && (
-                                    <div className="text-xs text-muted-foreground mt-1 truncate">
-                                      {exec.email}
-                                    </div>
-                                  )}
-                                </Label>
-                              </div>
-                            ))}
-                          </div>
-                        </RadioGroup>
-                      </div>
+                      <ExecutiveSelectRadioGroup
+                        executives={executives}
+                        value={selectedExecutiveIndex}
+                        onValueChange={setSelectedExecutiveIndex}
+                        title={`Select new recipient (${executives.length} available):`}
+                        idPrefix="change-exec"
+                        ariaLabel="Select new recipient"
+                      />
                       <div className="flex gap-2">
                         <Button
                           onClick={handleUpdateRecipient}
@@ -2758,111 +2956,16 @@ const ComplaintDetailPage: React.FC = () => {
                 </div>
               ) : executives.length > 0 ? (
                 <div className="space-y-6">
-                  <div>
-                    <Label className="font-semibold text-lg text-foreground mb-4 block">
-                      Select Executive to Address ({executives.length}{" "}
-                      available):
-                    </Label>
-                    <div className="relative w-full overflow-y-hidden">
-                      {/* Left Scroll Button */}
-                      {/* {canScrollLeft && (
-                        <Button
-                          variant="outline"
-                          size="icon"
-                          className="absolute left-2 top-1/2 -translate-y-1/2 z-10 bg-white shadow-lg hover:bg-gray-50"
-                          onClick={() => scrollOfficers("left")}
-                        >
-                          <ChevronLeft className="w-5 h-5" />
-                        </Button>
-                      )} */}
-                      {/* Right Scroll Button */}
-                      {/* {canScrollRight && (
-                        <Button
-                          variant="outline"
-                          size="icon"
-                          className="absolute right-2 top-1/2 -translate-y-1/2 z-10 bg-white shadow-lg hover:bg-gray-50"
-                          onClick={() => scrollOfficers("right")}
-                        >
-                          <ChevronRight className="w-5 h-5" />
-                        </Button>
-                      )} */}
-                      {/* Scrollable Container: parent = available width (w-full min-w-0), cards row inside so cards move within this width via scroll */}
-                      <div
-                        ref={officersScrollRef}
-                        onScroll={checkScrollButtons}
-                        className="w-full min-w-0 scrollbar-hide pb-4 px-12"
-                        style={{ scrollBehavior: "smooth" }}
-                      >
-                        <RadioGroup
-                          value={selectedExecutiveIndex.toString()}
-                          onValueChange={(value) =>
-                            setSelectedExecutiveIndex(parseInt(value))
-                          }
-                          className="inline-block min-w-0"
-                          aria-label="Select executive to address"
-                        >
-                          {/* Inner wrapper: guarantees horizontal row; RadioGroup root has grid, so row layout lives here to avoid layout collapse on selection */}
-                          <div className="flex gap-4 w-max">
-                            {executives.map((exec, index) => (
-                              <div
-                                key={index}
-                                className="w-[320px] flex-shrink-0"
-                              >
-                                <RadioGroupItem
-                                  value={index.toString()}
-                                  id={`executive-${index}`}
-                                  className="peer sr-only"
-                                  aria-hidden
-                                />
-                                <Label
-                                  htmlFor={`executive-${index}`}
-                                  className="flex flex-col p-4 border-2 rounded-xl cursor-pointer hover:bg-gradient-to-br hover:from-blue-50 hover:to-indigo-50 transition-all peer-data-[state=checked]:border-primary peer-data-[state=checked]:ring-4 peer-data-[state=checked]:ring-primary/20 peer-data-[state=checked]:bg-gradient-to-br peer-data-[state=checked]:from-primary/5 peer-data-[state=checked]:to-orange-50 h-full"
-                                >
-                                  <div className="flex items-start gap-3">
-                                    <div className="w-10 h-10 rounded-full bg-gradient-to-br from-blue-500 to-indigo-600 flex items-center justify-center text-white font-bold text-sm flex-shrink-0">
-                                      {index + 1}
-                                    </div>
-                                    <div className="flex-1 min-w-0">
-                                      <div className="font-bold text-base text-foreground mb-1">
-                                        {exec.name || "Unknown"}
-                                      </div>
-                                      <div className="text-sm font-medium text-muted-foreground mb-2">
-                                        {exec.designation} - {exec.district}
-                                      </div>
-                                      <div className="space-y-1.5 text-sm">
-                                        {exec.email && (
-                                          <div className="flex items-center gap-2 text-muted-foreground">
-                                            <Mail className="w-3.5 h-3.5 text-primary flex-shrink-0" />
-                                            <span className="truncate">
-                                              {exec.email}
-                                            </span>
-                                          </div>
-                                        )}
-                                        {exec.phone && (
-                                          <div className="flex items-center gap-2 text-muted-foreground">
-                                            <Phone className="w-3.5 h-3.5 text-primary flex-shrink-0" />
-                                            <span>{exec.phone}</span>
-                                          </div>
-                                        )}
-                                        {exec.office_address && (
-                                          <div className="flex items-start gap-2 text-muted-foreground">
-                                            <MapPin className="w-3.5 h-3.5 text-primary mt-0.5 flex-shrink-0" />
-                                            <span className="text-xs">
-                                              {exec.office_address}
-                                            </span>
-                                          </div>
-                                        )}
-                                      </div>
-                                    </div>
-                                  </div>
-                                </Label>
-                              </div>
-                            ))}
-                          </div>
-                        </RadioGroup>
-                      </div>
-                    </div>
-                  </div>
+                  <ExecutiveSelectRadioGroup
+                    executives={executives}
+                    value={selectedExecutiveIndex}
+                    onValueChange={setSelectedExecutiveIndex}
+                    title={`Select Executive to Address (${executives.length} available):`}
+                    idPrefix="executive"
+                    scrollRef={officersScrollRef}
+                    onScroll={checkScrollButtons}
+                    ariaLabel="Select executive to address"
+                  />
 
                   {!letter && (
                     <Button
@@ -3303,49 +3406,16 @@ const ComplaintDetailPage: React.FC = () => {
                         </p>
                       ) : (
                         <>
-                          <div
-                            className="w-full min-w-0 overflow-x-auto"
-                            ref={assignmentOfficersScrollRef}
-                          >
-                            <RadioGroup
-                              value={String(selectedAssignmentExecutiveIndex)}
-                              onValueChange={(v) =>
-                                setSelectedAssignmentExecutiveIndex(
-                                  parseInt(v, 10)
-                                )
-                              }
-                              className="inline-block min-w-0"
-                            >
-                              <div className="flex gap-4 w-max">
-                                {assignmentExecutives.map((exec, idx) => (
-                                  <Label
-                                    key={idx}
-                                    className={`flex flex-col cursor-pointer border-2 rounded-xl p-4 min-w-[200px] transition-all ${
-                                      selectedAssignmentExecutiveIndex === idx
-                                        ? "border-primary bg-primary/5"
-                                        : "border-gray-200 hover:border-gray-300"
-                                    }`}
-                                  >
-                                    <RadioGroupItem
-                                      value={String(idx)}
-                                      className="sr-only"
-                                    />
-                                    <div className="font-semibold text-foreground">
-                                      {exec.name || "—"}
-                                    </div>
-                                    <div className="text-xs text-muted-foreground mt-1">
-                                      {exec.designation || ""}
-                                    </div>
-                                    {exec.email && (
-                                      <div className="text-xs text-primary mt-1 truncate">
-                                        {exec.email}
-                                      </div>
-                                    )}
-                                  </Label>
-                                ))}
-                              </div>
-                            </RadioGroup>
-                          </div>
+                          <ExecutiveSelectRadioGroup
+                            executives={assignmentExecutives}
+                            value={selectedAssignmentExecutiveIndex}
+                            onValueChange={setSelectedAssignmentExecutiveIndex}
+                            title={`Select new officer (${assignmentExecutives.length} available):`}
+                            idPrefix="assignment-exec"
+                            scrollRef={assignmentOfficersScrollRef}
+                            onScroll={checkAssignmentScrollButtons}
+                            ariaLabel="Select officer to assign"
+                          />
                           <div className="flex gap-3">
                             <Button
                               variant="outline"
@@ -3355,7 +3425,10 @@ const ComplaintDetailPage: React.FC = () => {
                             </Button>
                             <Button
                               onClick={handleChangeOfficerConfirm}
-                              disabled={changingOfficer}
+                              disabled={
+                                changingOfficer ||
+                                selectedAssignmentExecutiveIndex < 0
+                              }
                             >
                               {changingOfficer ? (
                                 <>
@@ -3684,129 +3757,208 @@ const ComplaintDetailPage: React.FC = () => {
                     </div>
                   ) : (
                     <div className="space-y-6">
-                      {/* Highlighted Selected Officer Card */}
-                      {(complaint as any)?.selected_officer && (
-                        <div className="bg-gradient-to-br from-orange-50 via-amber-50 to-orange-100 border-2 border-orange-300 rounded-xl p-6 shadow-lg">
-                          <div className="flex items-start gap-4">
-                            <div className="w-16 h-16 rounded-full bg-gradient-to-br from-orange-500 to-amber-600 flex items-center justify-center text-white font-bold text-2xl flex-shrink-0 shadow-lg border-4 border-white">
-                              {(complaint as any).selected_officer.name
-                                ?.charAt(0)
-                                .toUpperCase() || "O"}
+                      {showChangeSelectedOfficerBeforeAssign ? (
+                        <>
+                          <p className="text-sm text-muted-foreground">
+                            Select a new officer. Letter &quot;To&quot; will be
+                            updated; you can then assign the complaint to them.
+                          </p>
+                          {loadingAssignmentExecutives ? (
+                            <div className="flex items-center justify-center py-8">
+                              <Loader2 className="w-8 h-8 animate-spin text-primary" />
                             </div>
-                            <div className="flex-1">
-                              <div className="mb-4">
-                                <div className="flex items-center gap-2 mb-2">
-                                  <Badge className="bg-orange-500 text-white border-0">
-                                    Selected Officer
-                                  </Badge>
-                                </div>
-                                <h3 className="text-2xl font-bold text-foreground mb-1">
-                                  {(complaint as any).selected_officer.name ||
-                                    "Unknown"}
-                                </h3>
-                                <p className="text-lg font-semibold text-primary">
-                                  {
-                                    (complaint as any).selected_officer
-                                      .designation
+                          ) : assignmentExecutives.length === 0 ? (
+                            <p className="text-sm text-muted-foreground text-center py-4">
+                              No officers found. Try loading executives again.
+                            </p>
+                          ) : (
+                            <>
+                              <ExecutiveSelectRadioGroup
+                                executives={assignmentExecutives}
+                                value={selectedAssignmentExecutiveIndex}
+                                onValueChange={
+                                  setSelectedAssignmentExecutiveIndex
+                                }
+                                title={`Select officer (${assignmentExecutives.length} available):`}
+                                idPrefix="before-assign-exec"
+                                scrollRef={assignmentOfficersScrollRef}
+                                onScroll={checkAssignmentScrollButtons}
+                                ariaLabel="Select officer for letter recipient"
+                              />
+                              <div className="flex gap-3">
+                                <Button
+                                  variant="outline"
+                                  onClick={() =>
+                                    setShowChangeSelectedOfficerBeforeAssign(
+                                      false
+                                    )
                                   }
-                                </p>
+                                >
+                                  Cancel
+                                </Button>
+                                <Button
+                                  onClick={handleUpdateRecipientBeforeAssign}
+                                  disabled={
+                                    updatingRecipient ||
+                                    selectedAssignmentExecutiveIndex < 0
+                                  }
+                                  className="bg-primary hover:bg-primary/90"
+                                >
+                                  {updatingRecipient ? (
+                                    <>
+                                      <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                                      Updating...
+                                    </>
+                                  ) : (
+                                    "Update recipient"
+                                  )}
+                                </Button>
                               </div>
-                              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                                {(complaint as any).selected_officer.email && (
-                                  <div className="flex items-center gap-3 p-3 bg-white rounded-lg border border-orange-200 shadow-sm">
-                                    <div className="p-2 bg-blue-500 rounded-lg">
-                                      <Mail className="w-4 h-4 text-white" />
+                            </>
+                          )}
+                        </>
+                      ) : (
+                        <>
+                          {/* Highlighted Selected Officer Card */}
+                          {(complaint as any)?.selected_officer && (
+                            <div className="bg-gradient-to-br from-orange-50 via-amber-50 to-orange-100 border-2 border-orange-300 rounded-xl p-6 shadow-lg">
+                              <div className="flex items-start gap-4">
+                                <div className="w-16 h-16 rounded-full bg-gradient-to-br from-orange-500 to-amber-600 flex items-center justify-center text-white font-bold text-2xl flex-shrink-0 shadow-lg border-4 border-white">
+                                  {(complaint as any).selected_officer.name
+                                    ?.charAt(0)
+                                    .toUpperCase() || "O"}
+                                </div>
+                                <div className="flex-1">
+                                  <div className="mb-4">
+                                    <div className="flex items-center gap-2 mb-2">
+                                      <Badge className="bg-orange-500 text-white border-0">
+                                        Selected Officer
+                                      </Badge>
                                     </div>
-                                    <div className="flex-1 min-w-0">
-                                      <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-1">
-                                        Email
-                                      </p>
-                                      <a
-                                        href={`mailto:${
-                                          (complaint as any).selected_officer
-                                            .email
-                                        }`}
-                                        className="text-sm font-medium text-foreground hover:text-primary break-all"
-                                      >
-                                        {
-                                          (complaint as any).selected_officer
-                                            .email
-                                        }
-                                      </a>
-                                    </div>
+                                    <h3 className="text-2xl font-bold text-foreground mb-1">
+                                      {(complaint as any).selected_officer
+                                        .name || "Unknown"}
+                                    </h3>
+                                    <p className="text-lg font-semibold text-primary">
+                                      {
+                                        (complaint as any).selected_officer
+                                          .designation
+                                      }
+                                    </p>
                                   </div>
-                                )}
-                                {(complaint as any).selected_officer.phone && (
-                                  <div className="flex items-center gap-3 p-3 bg-white rounded-lg border border-orange-200 shadow-sm">
-                                    <div className="p-2 bg-green-500 rounded-lg">
-                                      <Phone className="w-4 h-4 text-white" />
-                                    </div>
-                                    <div className="flex-1 min-w-0">
-                                      <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-1">
-                                        Phone
-                                      </p>
-                                      <a
-                                        href={`tel:${
-                                          (complaint as any).selected_officer
-                                            .phone
-                                        }`}
-                                        className="text-sm font-medium text-foreground hover:text-primary"
-                                      >
-                                        {
-                                          (complaint as any).selected_officer
-                                            .phone
-                                        }
-                                      </a>
-                                    </div>
+                                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                    {(complaint as any).selected_officer
+                                      .email && (
+                                      <div className="flex items-center gap-3 p-3 bg-white rounded-lg border border-orange-200 shadow-sm">
+                                        <div className="p-2 bg-blue-500 rounded-lg">
+                                          <Mail className="w-4 h-4 text-white" />
+                                        </div>
+                                        <div className="flex-1 min-w-0">
+                                          <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-1">
+                                            Email
+                                          </p>
+                                          <a
+                                            href={`mailto:${
+                                              (complaint as any)
+                                                .selected_officer.email
+                                            }`}
+                                            className="text-sm font-medium text-foreground hover:text-primary break-all"
+                                          >
+                                            {
+                                              (complaint as any)
+                                                .selected_officer.email
+                                            }
+                                          </a>
+                                        </div>
+                                      </div>
+                                    )}
+                                    {(complaint as any).selected_officer
+                                      .phone && (
+                                      <div className="flex items-center gap-3 p-3 bg-white rounded-lg border border-orange-200 shadow-sm">
+                                        <div className="p-2 bg-green-500 rounded-lg">
+                                          <Phone className="w-4 h-4 text-white" />
+                                        </div>
+                                        <div className="flex-1 min-w-0">
+                                          <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-1">
+                                            Phone
+                                          </p>
+                                          <a
+                                            href={`tel:${
+                                              (complaint as any)
+                                                .selected_officer.phone
+                                            }`}
+                                            className="text-sm font-medium text-foreground hover:text-primary"
+                                          >
+                                            {
+                                              (complaint as any)
+                                                .selected_officer.phone
+                                            }
+                                          </a>
+                                        </div>
+                                      </div>
+                                    )}
+                                    {(complaint as any).selected_officer
+                                      .office_address && (
+                                      <div className="flex items-start gap-3 p-3 bg-white rounded-lg border border-orange-200 shadow-sm md:col-span-2">
+                                        <div className="p-2 bg-purple-500 rounded-lg flex-shrink-0">
+                                          <MapPin className="w-4 h-4 text-white" />
+                                        </div>
+                                        <div className="flex-1 min-w-0">
+                                          <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-1">
+                                            Office Address
+                                          </p>
+                                          <p className="text-sm font-medium text-foreground">
+                                            {
+                                              (complaint as any)
+                                                .selected_officer.office_address
+                                            }
+                                          </p>
+                                        </div>
+                                      </div>
+                                    )}
                                   </div>
-                                )}
-                                {(complaint as any).selected_officer
-                                  .office_address && (
-                                  <div className="flex items-start gap-3 p-3 bg-white rounded-lg border border-orange-200 shadow-sm md:col-span-2">
-                                    <div className="p-2 bg-purple-500 rounded-lg flex-shrink-0">
-                                      <MapPin className="w-4 h-4 text-white" />
-                                    </div>
-                                    <div className="flex-1 min-w-0">
-                                      <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-1">
-                                        Office Address
-                                      </p>
-                                      <p className="text-sm font-medium text-foreground">
-                                        {
-                                          (complaint as any).selected_officer
-                                            .office_address
-                                        }
-                                      </p>
-                                    </div>
-                                  </div>
-                                )}
+                                </div>
                               </div>
                             </div>
-                          </div>
-                        </div>
-                      )}
+                          )}
 
-                      {/* Assign Button */}
-                      <Button
-                        onClick={handleAssignOfficer}
-                        disabled={
-                          assigningOfficer ||
-                          !(complaint as any)?.selected_officer
-                        }
-                        className="w-full bg-primary hover:bg-primary/90 shadow-lg"
-                        size="lg"
-                      >
-                        {assigningOfficer ? (
-                          <>
-                            <Loader2 className="w-4 h-4 mr-2 animate-spin" />
-                            Assigning Officer...
-                          </>
-                        ) : (
-                          <>
-                            <UserCheck className="w-4 h-4 mr-2" />
-                            Assign Complaint to Selected Officer
-                          </>
-                        )}
-                      </Button>
+                          {/* Change selected officer + Assign Button */}
+                          <div className="flex flex-wrap gap-3">
+                            <Button
+                              variant="outline"
+                              onClick={
+                                handleChangeSelectedOfficerBeforeAssignOpen
+                              }
+                              disabled={assigningOfficer}
+                              className="border-orange-500 text-orange-600 hover:bg-orange-50 hover:text-orange-700"
+                            >
+                              <Users className="w-4 h-4 mr-2" />
+                              Change selected officer
+                            </Button>
+                            <Button
+                              onClick={handleAssignOfficer}
+                              disabled={
+                                assigningOfficer ||
+                                !(complaint as any)?.selected_officer
+                              }
+                              className="flex-1 min-w-[200px] bg-primary hover:bg-primary/90 shadow-lg"
+                              size="lg"
+                            >
+                              {assigningOfficer ? (
+                                <>
+                                  <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                                  Assigning Officer...
+                                </>
+                              ) : (
+                                <>
+                                  <UserCheck className="w-4 h-4 mr-2" />
+                                  Assign Complaint to Selected Officer
+                                </>
+                              )}
+                            </Button>
+                          </div>
+                        </>
+                      )}
                     </div>
                   )}
                 </CardContent>

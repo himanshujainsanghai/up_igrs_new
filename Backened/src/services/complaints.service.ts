@@ -40,6 +40,8 @@ export interface CreateComplaintDto {
   images?: string[];
   voter_id?: string;
   created_by_admin?: boolean;
+  /** User id of admin who created (for notification: exclude from recipients) */
+  created_by_user_id?: string;
   // Geographic fields (required)
   latitude: number; // Latitude coordinate (required)
   longitude: number; // Longitude coordinate (required)
@@ -184,15 +186,29 @@ export const getComplaintById = async (id: string) => {
     .sort({ step_number: 1 })
     .lean();
 
-  // Fetch notes
-  const notes = await ComplaintNote.find({ complaint_id: id })
+  // Fetch notes (shared collection: admin notes have created_by, officer notes have officer_id)
+  const allNotes = await ComplaintNote.find({ complaint_id: id })
     .sort({ created_at: -1 })
     .lean();
 
-  // Fetch documents
-  const documents = await ComplaintDocument.find({ complaint_id: id })
+  const admin_notes = allNotes.filter(
+    (n: any) => n.officer_id == null || n.officer_id === ""
+  );
+  const officer_notes = allNotes.filter(
+    (n: any) => n.officer_id != null && n.officer_id !== ""
+  );
+
+  // Fetch documents (shared collection: admin docs use file_type enum; officer docs have attachment_type)
+  const allDocuments = await ComplaintDocument.find({ complaint_id: id })
     .sort({ created_at: -1 })
     .lean();
+
+  const admin_documents = allDocuments.filter(
+    (d: any) => d.attachment_type == null || d.attachment_type === ""
+  );
+  const officer_documents = allDocuments.filter(
+    (d: any) => d.attachment_type != null && d.attachment_type !== ""
+  );
 
   // Fetch extension requests for this complaint
   const extensionRequests = await ComplaintExtensionRequest.find({
@@ -245,8 +261,10 @@ export const getComplaintById = async (id: string) => {
   return {
     ...complaint,
     ai_steps: steps,
-    notes,
-    documents,
+    admin_notes,
+    officer_notes,
+    admin_documents,
+    officer_documents,
     extensionRequests,
     assignedOfficerDetails,
   };
@@ -316,8 +334,11 @@ export const createComplaint = async (data: CreateComplaintDto) => {
           title: complaint.title,
           category: complaint.category,
           created_by: data.created_by_admin ? "admin" : undefined,
+          created_by_user_id: data.created_by_user_id,
         },
-        data.created_by_admin ? { role: "admin" as const } : { role: "citizen" as const }
+        data.created_by_admin
+          ? { role: "admin" as const }
+          : { role: "citizen" as const }
       );
     } catch (err) {
       logger.warn("Timeline appendComplaintCreated failed:", err);
@@ -453,14 +474,21 @@ export const addComplaintNote = async (
 };
 
 /**
- * Get complaint notes
+ * Get complaint notes (segregated: admin vs officer)
  */
 export const getComplaintNotes = async (complaintId: string) => {
-  const notes = await ComplaintNote.find({ complaint_id: complaintId })
+  const allNotes = await ComplaintNote.find({ complaint_id: complaintId })
     .sort({ created_at: -1 })
     .lean();
 
-  return notes;
+  const admin_notes = allNotes.filter(
+    (n: any) => n.officer_id == null || n.officer_id === ""
+  );
+  const officer_notes = allNotes.filter(
+    (n: any) => n.officer_id != null && n.officer_id !== ""
+  );
+
+  return { admin_notes, officer_notes };
 };
 
 /**
@@ -507,14 +535,23 @@ export const addComplaintDocument = async (
 };
 
 /**
- * Get complaint documents
+ * Get complaint documents (segregated: admin vs officer)
  */
 export const getComplaintDocuments = async (complaintId: string) => {
-  const documents = await ComplaintDocument.find({ complaint_id: complaintId })
+  const allDocuments = await ComplaintDocument.find({
+    complaint_id: complaintId,
+  })
     .sort({ created_at: -1 })
     .lean();
 
-  return documents;
+  const admin_documents = allDocuments.filter(
+    (d: any) => d.attachment_type == null || d.attachment_type === ""
+  );
+  const officer_documents = allDocuments.filter(
+    (d: any) => d.attachment_type != null && d.attachment_type !== ""
+  );
+
+  return { admin_documents, officer_documents };
 };
 
 /**
@@ -683,8 +720,10 @@ export const getOfficerAttachments = async (
     throw new ValidationError("You are not assigned to this complaint");
   }
 
+  // Same collection as ComplaintDocument; only return docs that have attachment_type (officer uploads)
   const attachments = await OfficerAttachment.find({
     complaint_id: complaintId,
+    attachment_type: { $in: ["inward", "outward"] },
   })
     .sort({ created_at: -1 })
     .lean();
@@ -693,7 +732,24 @@ export const getOfficerAttachments = async (
 };
 
 /**
- * Officer: combined complaint detail with extension requests, notes, attachments
+ * Get officer-only documents from complaint_documents collection.
+ * OfficerAttachment and ComplaintDocument share the same collection; admin docs have file_type
+ * but no attachment_type. Officer uploads have attachment_type set. Use this so admin and officer
+ * panels show the same set of "officer documents".
+ */
+const getOfficerAttachmentsOnly = async (complaintId: string) => {
+  return OfficerAttachment.find({
+    complaint_id: complaintId,
+    attachment_type: { $in: ["inward", "outward"] },
+  })
+    .sort({ created_at: -1 })
+    .lean();
+};
+
+/**
+ * Officer: combined complaint detail with extension requests, notes (admin + officer), documents (admin + officer)
+ * Segregates admin notes/documents so officer panel can display them like the admin panel.
+ * officer_attachments: only documents with attachment_type set (real officer uploads), same as admin's officer_documents.
  */
 export const getOfficerComplaintDetail = async (
   complaintId: string,
@@ -711,23 +767,31 @@ export const getOfficerComplaintDetail = async (
     throw new ValidationError("You are not assigned to this complaint");
   }
 
-  const [extensionRequests, notes, attachments] = await Promise.all([
+  const [
+    extensionRequests,
+    officerNotes,
+    officerAttachments,
+    notesSegregated,
+    documentsSegregated,
+  ] = await Promise.all([
     ComplaintExtensionRequest.find({ complaint_id: complaintId })
       .sort({ created_at: -1 })
       .lean(),
     OfficerNote.find({ complaint_id: complaintId })
       .sort({ created_at: -1 })
       .lean(),
-    OfficerAttachment.find({ complaint_id: complaintId })
-      .sort({ created_at: -1 })
-      .lean(),
+    getOfficerAttachmentsOnly(complaintId),
+    getComplaintNotes(complaintId),
+    getComplaintDocuments(complaintId),
   ]);
 
   return {
     complaint,
     extension_requests: extensionRequests,
-    officer_notes: notes,
-    officer_attachments: attachments,
+    officer_notes: officerNotes,
+    officer_attachments: officerAttachments,
+    admin_notes: notesSegregated.admin_notes,
+    admin_documents: documentsSegregated.admin_documents,
   };
 };
 
@@ -1496,7 +1560,9 @@ async function removeComplaintFromOfficer(
   );
   if (officer.assignedComplaints.length < before) {
     await officer.save();
-    logger.debug(`Removed complaint ${complaintMongoId} from officer ${officerId} (complaint moved/reassigned)`);
+    logger.debug(
+      `Removed complaint ${complaintMongoId} from officer ${officerId} (complaint moved/reassigned)`
+    );
   }
 }
 
@@ -1945,9 +2011,7 @@ export const reassignOfficer = async (
 
   const previousOfficerId = complaint.assignedOfficer.toString();
   if (previousOfficerId === newOfficerId) {
-    throw new ValidationError(
-      "Complaint is already assigned to this officer."
-    );
+    throw new ValidationError("Complaint is already assigned to this officer.");
   }
 
   if (!mongoose.Types.ObjectId.isValid(newOfficerId)) {

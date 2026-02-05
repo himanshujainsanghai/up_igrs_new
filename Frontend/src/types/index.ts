@@ -156,6 +156,14 @@ export interface Complaint {
   voterId?: string;
   documents?: ComplaintDocument[];
   notes?: ComplaintNote[];
+  /** Segregated: admin-added notes */
+  admin_notes?: ComplaintNote[];
+  /** Segregated: officer-added notes */
+  officer_notes?: OfficerNote[];
+  /** Segregated: admin-uploaded documents */
+  admin_documents?: ComplaintDocument[];
+  /** Segregated: officer-uploaded documents */
+  officer_documents?: OfficerAttachment[];
   aiResolution?: AIResolution;
   assignedTo?: string;
   assigned_to_user_id?: string; // User ID of assigned officer (UUID)
@@ -260,6 +268,18 @@ export interface OfficerAttachment {
   fileSize?: number;
   uploadedBy?: string;
   createdAt: string;
+}
+
+/** Response shape for GET /complaints/:id/notes (segregated) */
+export interface ComplaintNotesResponse {
+  adminNotes: ComplaintNote[];
+  officerNotes: OfficerNote[];
+}
+
+/** Response shape for GET /complaints/:id/documents (segregated) */
+export interface ComplaintDocumentsResponse {
+  adminDocuments: ComplaintDocument[];
+  officerDocuments: OfficerAttachment[];
 }
 
 export interface ComplaintExtensionRequest {

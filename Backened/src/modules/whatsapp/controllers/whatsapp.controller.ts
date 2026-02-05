@@ -6,10 +6,8 @@ import { processFlowSubmission } from "../conversation/flowProcessor";
 import { sendFlowMessage, sendTextMessage } from "../services/metaClient";
 import { sessionStore } from "../services/sessionStore";
 import { handleIncomingMessage } from "../services/sessionManager";
-import {
-  FlowSubmissionPayload,
-  WhatsAppInboundMessage,
-} from "../types";
+import { withUserLock } from "../services/userLock";
+import { FlowSubmissionPayload, WhatsAppInboundMessage } from "../types";
 
 const normalizeMessage = (raw: any): WhatsAppInboundMessage => {
   const base = {
@@ -46,7 +44,7 @@ const normalizeMessage = (raw: any): WhatsAppInboundMessage => {
 };
 
 const mapFlowPayload = (
-  payload: FlowSubmissionPayload["data"] & { name?: string; email?: string },
+  payload: FlowSubmissionPayload["data"] & { name?: string; email?: string }
 ) => ({
   contact_name: payload.contact_name || payload.name,
   contact_email: payload.contact_email || payload.email,
@@ -97,7 +95,9 @@ const markMessageProcessed = (messageId: string): boolean => {
  * Flow submissions bypass session; all other messages go through session manager.
  * Save session only on success; clear on endSession (e.g. complaint submitted, other).
  */
-const processMessage = async (message: WhatsAppInboundMessage): Promise<void> => {
+const processMessage = async (
+  message: WhatsAppInboundMessage
+): Promise<void> => {
   try {
     // Flow submission path (highest priority) - bypasses session
     if (message.flowPayloadRaw) {
@@ -112,7 +112,10 @@ const processMessage = async (message: WhatsAppInboundMessage): Promise<void> =>
         };
         const result = await processFlowSubmission(flowPayload);
         await sendTextMessage(message.from, result.message);
-        await sendTextMessage(message.from, "Thanks for contacting us. Feel free to reach out anytime.");
+        await sendTextMessage(
+          message.from,
+          "Thanks for contacting us. Feel free to reach out anytime."
+        );
       } catch (err) {
         logger.error("Flow submission processing error", {
           messageId: message.id,
@@ -122,7 +125,7 @@ const processMessage = async (message: WhatsAppInboundMessage): Promise<void> =>
         try {
           await sendTextMessage(
             message.from,
-            "We could not process the form submission. Please try again.",
+            "We could not process the form submission. Please try again."
           );
         } catch {
           // Ignore send failure
@@ -131,43 +134,46 @@ const processMessage = async (message: WhatsAppInboundMessage): Promise<void> =>
       return;
     }
 
-    // All other messages: session manager (intent capture, file complaint, track, other)
-    const result = await handleIncomingMessage(message);
+    // Lock only when user already has a session (intent path). First message has no
+    // session yet and no concurrent mutation to protect; skip lock for fast first reply.
+    const runProcess = async () => {
+      const out = await handleIncomingMessage(message);
 
-    // Save session only on success (edge case: internal error / rate limit → no save)
-    if (result.saveSession) {
-      await sessionStore.saveSession(result.session);
-    }
-
-    // End session: clear after sending (e.g. complaint submitted, user chose "other")
-    if (result.endSession) {
-      await sessionStore.clearSession(message.from);
-    }
-
-    // Optional: offer Flow when user starts complaint (if Flow is configured)
-    if (
-      result.saveSession &&
-      result.session.intent === "file" &&
-      result.session.state === "COLLECT_BASICS" &&
-      !result.session.data.contact_name
-    ) {
-      try {
-        await sendFlowMessage(message.from);
-      } catch {
-        // Fallback to chat; replies already include first prompt
+      if (out.saveSession) {
+        await sessionStore.saveSession(out.session);
       }
-    }
-
-    // Send replies
-    for (const reply of result.replies) {
-      try {
-        await sendTextMessage(message.from, reply);
-      } catch (err) {
-        logger.error("Failed to send reply", {
-          from: message.from,
-          ...serializeErrorForLog(err),
-        });
+      if (out.endSession) {
+        await sessionStore.clearSession(message.from);
       }
+      if (
+        out.saveSession &&
+        out.session.intent === "file" &&
+        out.session.state === "COLLECT_BASICS" &&
+        !out.session.data.contact_name
+      ) {
+        try {
+          await sendFlowMessage(message.from);
+        } catch {
+          // Fallback to chat
+        }
+      }
+      for (const reply of out.replies) {
+        try {
+          await sendTextMessage(message.from, reply);
+        } catch (err) {
+          logger.error("Failed to send reply", {
+            from: message.from,
+            ...serializeErrorForLog(err),
+          });
+        }
+      }
+    };
+
+    const hasSession = (await sessionStore.getSession(message.from)) != null;
+    if (hasSession) {
+      await withUserLock(message.from, runProcess);
+    } else {
+      await runProcess();
     }
   } catch (err) {
     logger.error("Unexpected error processing message", {

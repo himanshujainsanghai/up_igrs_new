@@ -10,6 +10,8 @@ export interface WhatsAppConfig {
   apiBaseUrl: string;
   appBaseUrl?: string;
   redisUrl?: string;
+  /** Model for AI-assisted free-form complaint parsing (WHATSAPP_CONVERSATION_MODEL). */
+  conversationModel?: string;
 }
 
 export const whatsappConfig: WhatsAppConfig = {
@@ -22,6 +24,7 @@ export const whatsappConfig: WhatsAppConfig = {
   apiBaseUrl: "https://graph.facebook.com/v19.0",
   appBaseUrl: env.FRONTEND_URL || "http://localhost:8080",
   redisUrl: env.REDIS_URL,
+  conversationModel: env.WHATSAPP_CONVERSATION_MODEL,
 };
 
 export const isWhatsAppConfigured = (): boolean =>
@@ -30,5 +33,3 @@ export const isWhatsAppConfigured = (): boolean =>
       whatsappConfig.verifyToken &&
       whatsappConfig.phoneNumberId
   );
-
-

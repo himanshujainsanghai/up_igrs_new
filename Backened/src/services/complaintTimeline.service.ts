@@ -125,7 +125,12 @@ export async function appendEvent(
 
 export async function appendComplaintCreated(
   complaintId: string,
-  payload: { title?: string; category?: string; created_by?: string },
+  payload: {
+    title?: string;
+    category?: string;
+    created_by?: string;
+    created_by_user_id?: string;
+  },
   actor?: TimelineActor
 ) {
   return appendEvent(

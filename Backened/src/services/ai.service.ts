@@ -39,6 +39,7 @@ const debugLog = (message: string, data?: any) => {
 
 /**
  * OpenRouter API Request Interface
+ * Supports text, image_url (images), and file (PDFs) content types per OpenRouter multimodal docs.
  */
 interface OpenRouterRequest {
   model: string;
@@ -47,11 +48,15 @@ interface OpenRouterRequest {
     content:
       | string
       | Array<{
-          type: "text" | "image_url";
+          type: "text" | "image_url" | "file";
           text?: string;
           image_url?: {
             url: string;
             detail?: "low" | "high" | "auto";
+          };
+          file?: {
+            filename?: string;
+            fileData?: string; // URL or data:application/pdf;base64,...
           };
         }>;
   }>;
@@ -59,6 +64,11 @@ interface OpenRouterRequest {
   temperature?: number;
   response_format?: { type: "json_object" | "text" };
   stream?: boolean;
+  /** Required for PDF processing: file-parser plugin with pdf engine */
+  plugins?: Array<{
+    id: string;
+    pdf?: { engine: "pdf-text" | "mistral-ocr" | "native" };
+  }>;
 }
 
 /**
@@ -401,6 +411,151 @@ const resolveDocumentUrlsToAccessible = async (
   return resolved;
 };
 
+/** Supported image extensions for vision APIs (URLs only; data URLs use MIME). */
+const VISION_IMAGE_EXTENSIONS = new Set(
+  [".png", ".jpg", ".jpeg", ".webp", ".gif"].map((e) => e.toLowerCase())
+);
+
+/** Document input for summarization: image (vision) or PDF (file API). */
+export type DocumentSummaryInput =
+  | { type: "image"; url: string }
+  | { type: "pdf"; url: string; filename?: string };
+
+/**
+ * Classify a document URL as image or PDF for OpenRouter.
+ * Vision APIs accept only PNG/JPEG/WebP/GIF URLs; PDFs must use the file content type.
+ */
+function classifyDocumentUrl(url: string): "image" | "pdf" {
+  if (!url || typeof url !== "string") return "image";
+  const lower = url.toLowerCase();
+  if (lower.startsWith("data:")) {
+    if (lower.startsWith("data:application/pdf")) return "pdf";
+    return "image";
+  }
+  try {
+    const pathname = new URL(url).pathname;
+    const ext = pathname.includes(".")
+      ? pathname.slice(pathname.lastIndexOf("."))
+      : "";
+    if (ext && VISION_IMAGE_EXTENSIONS.has(ext.toLowerCase())) return "image";
+    if (ext === ".pdf") return "pdf";
+  } catch {
+    // Invalid URL; treat as image for backward compatibility
+  }
+  return "image";
+}
+
+/**
+ * Build document summary inputs from resolved URLs (classify image vs PDF).
+ */
+function toDocumentSummaryInputs(
+  resolvedUrls: string[]
+): DocumentSummaryInput[] {
+  return resolvedUrls.map((url) => {
+    const kind = classifyDocumentUrl(url);
+    if (kind === "pdf") {
+      const filename = url.startsWith("data:")
+        ? "document.pdf"
+        : url.split("/").pop()?.split("?")[0] || "document.pdf";
+      return { type: "pdf", url, filename };
+    }
+    return { type: "image", url };
+  });
+}
+
+/**
+ * Document-summary batch call supporting both images (image_url) and PDFs (file).
+ * OpenRouter requires PDFs to be sent as type "file" with optional plugins; images as "image_url".
+ * Uses current OpenRouter model IDs for fallbacks.
+ */
+const callDocumentSummaryBatch = async (
+  inputs: DocumentSummaryInput[],
+  prompt: string,
+  systemPrompt: string,
+  options: {
+    model?: string;
+    maxTokens?: number;
+    temperature?: number;
+    detail?: "low" | "high" | "auto";
+  }
+): Promise<string> => {
+  const primaryModel =
+    options?.model || DOC_SUMMARIZE_MODEL || DEFAULT_VISION_MODEL;
+  const fallbackModels = [
+    "openai/gpt-4o",
+    "anthropic/claude-3.5-sonnet",
+  ].filter((m) => m !== primaryModel);
+
+  const content: OpenRouterRequest["messages"][0]["content"] = [
+    { type: "text", text: prompt },
+  ];
+
+  for (const input of inputs) {
+    if (input.type === "image") {
+      content.push({
+        type: "image_url",
+        image_url: {
+          url: input.url,
+          detail: options?.detail || "high",
+        },
+      });
+    } else {
+      content.push({
+        type: "file",
+        file: {
+          filename: input.filename || "document.pdf",
+          fileData: input.url,
+        },
+      });
+    }
+  }
+
+  const hasPdf = inputs.some((i) => i.type === "pdf");
+  const request: OpenRouterRequest = {
+    model: primaryModel,
+    messages: [
+      ...(systemPrompt
+        ? [{ role: "system" as const, content: systemPrompt }]
+        : []),
+      { role: "user", content },
+    ],
+    max_tokens: options?.maxTokens ?? 4000,
+    temperature: options?.temperature ?? 0.2,
+    ...(hasPdf && {
+      plugins: [{ id: "file-parser", pdf: { engine: "pdf-text" } }],
+    }),
+  };
+
+  try {
+    const response = await callOpenRouter(request);
+    return response.choices[0]?.message?.content?.trim() || "";
+  } catch (error: any) {
+    logger.warn(
+      `Primary document-summary model ${primaryModel} failed: ${error?.message}`
+    );
+    for (const fallbackModel of fallbackModels) {
+      try {
+        logger.info(
+          `Attempting fallback document-summary model: ${fallbackModel}`
+        );
+        request.model = fallbackModel;
+        const response = await callOpenRouter(request);
+        logger.info(
+          `Fallback document-summary model ${fallbackModel} succeeded`
+        );
+        return response.choices[0]?.message?.content?.trim() || "";
+      } catch (fallbackError: any) {
+        logger.warn(
+          `Fallback document-summary model ${fallbackModel} failed: ${fallbackError?.message}`
+        );
+      }
+    }
+    throw new Error(
+      `All document-summary models failed. Last error: ${error?.message}. Check OpenRouter API key and model availability.`
+    );
+  }
+};
+
 /** Complaint context passed when useComplaintContext is true */
 export interface DocumentSummaryComplaintContext {
   title: string;
@@ -590,12 +745,15 @@ ${contextBlock}${userPromptBlock}
 ════════════════════════════════════════════════════════════════════
 `;
 
+  const inputs = toDocumentSummaryInputs(accessibleUrls);
+  const pdfCount = inputs.filter((i) => i.type === "pdf").length;
+  const imageCount = inputs.length - pdfCount;
   logger.info(
-    `Generating document summary with DOC_SUMMARIZE_MODEL=${DOC_SUMMARIZE_MODEL}, useComplaintContext=${useComplaintContext}, documents=${accessibleUrls.length}`
+    `Generating document summary with DOC_SUMMARIZE_MODEL=${DOC_SUMMARIZE_MODEL}, useComplaintContext=${useComplaintContext}, documents=${inputs.length} (images=${imageCount}, pdfs=${pdfCount})`
   );
 
-  const response = await callVisionLLMBatch(
-    accessibleUrls,
+  const response = await callDocumentSummaryBatch(
+    inputs,
     promptToModel,
     systemPrompt,
     {

@@ -11,6 +11,7 @@ import { store } from "@/store";
 import { initializeAuth, getMe } from "@/store/slices/auth.slice";
 import { STORAGE_KEYS } from "@/lib/constants";
 import { AuthProvider } from "@/contexts/AuthContext";
+import { NotificationProvider } from "@/contexts/NotificationContext";
 import { ModalProvider } from "@/contexts/ModalContext";
 import { BadaunDistrictProvider } from "@/contexts/BadaunDistrictContext";
 import { I18nProvider } from "@/contexts/I18nContext";
@@ -85,224 +86,241 @@ const AppContent: React.FC = () => {
     <QueryClientProvider client={queryClient}>
       <I18nProvider>
         <AuthProvider>
-          <ModalProvider>
-            <BadaunDistrictProvider autoFetch={false}>
-              <Router>
-                <Routes>
-                  {/* Standalone Heat Map Routes - No AdminLayout */}
-                  <Route
-                    path="/admin/complaints/heatmap"
-                    element={
-                      <ProtectedRoute requireAdmin={true}>
-                        <ComplaintsHeatMapPage />
-                      </ProtectedRoute>
-                    }
-                  />
-                  <Route
-                    path="/admin/badaun/heatmap"
-                    element={
-                      <ProtectedRoute requireAdmin={true}>
-                        <BadaunHeatMapPage />
-                      </ProtectedRoute>
-                    }
-                  />
+          <NotificationProvider>
+            <ModalProvider>
+              <BadaunDistrictProvider autoFetch={false}>
+                <Router>
+                  <Routes>
+                    {/* Standalone Heat Map Routes - No AdminLayout */}
+                    <Route
+                      path="/admin/complaints/heatmap"
+                      element={
+                        <ProtectedRoute requireAdmin={true}>
+                          <ComplaintsHeatMapPage />
+                        </ProtectedRoute>
+                      }
+                    />
+                    <Route
+                      path="/admin/badaun/heatmap"
+                      element={
+                        <ProtectedRoute requireAdmin={true}>
+                          <BadaunHeatMapPage />
+                        </ProtectedRoute>
+                      }
+                    />
 
-                  {/* Protected Admin Routes - Admin Only */}
-                  <Route
-                    path="/admin/*"
-                    element={
-                      <ProtectedRoute requireAdmin={true}>
-                        <AdminLayout>
+                    {/* Protected Admin Routes - Admin Only */}
+                    <Route
+                      path="/admin/*"
+                      element={
+                        <ProtectedRoute requireAdmin={true}>
+                          <AdminLayout>
+                            <Routes>
+                              <Route index element={<Admin />} />
+                              <Route
+                                path="badaun"
+                                element={<BadaunMapTestPage />}
+                              />
+                              <Route
+                                path="india-map"
+                                element={<IndiaMapPage />}
+                              />
+                              <Route
+                                path="data-upload"
+                                element={<HierarchicalDataUploadPage />}
+                              />
+                              <Route path="dashboard" element={<Dashboard />} />
+                              <Route
+                                path="complaints"
+                                element={<ComplaintsPage />}
+                              />
+                              <Route
+                                path="complaints/:id"
+                                element={<ComplaintDetailPage />}
+                              />
+                              <Route
+                                path="complaints/pending"
+                                element={<ComplaintsPage />}
+                              />
+                              <Route
+                                path="complaints/in-progress"
+                                element={<ComplaintsPage />}
+                              />
+                              <Route
+                                path="complaints/resolved"
+                                element={<ComplaintsPage />}
+                              />
+                              <Route
+                                path="complaints/rejected"
+                                element={<ComplaintsPage />}
+                              />
+                              <Route
+                                path="complaints/category/:category"
+                                element={<ComplaintsPage />}
+                              />
+                              <Route
+                                path="meetings"
+                                element={<MeetingsPage />}
+                              />
+                              <Route
+                                path="meetings/pending"
+                                element={<MeetingsPage />}
+                              />
+                              <Route
+                                path="meetings/approved"
+                                element={<MeetingsPage />}
+                              />
+                              <Route
+                                path="meetings/completed"
+                                element={<MeetingsPage />}
+                              />
+                              <Route
+                                path="inventory"
+                                element={<InventoryPage />}
+                              />
+                              <Route
+                                path="inventory/add"
+                                element={<InventoryFormPage />}
+                              />
+                              <Route
+                                path="inventory/:id"
+                                element={<InventoryDetailPage />}
+                              />
+                              <Route
+                                path="inventory/:id/edit"
+                                element={<InventoryFormPage />}
+                              />
+                              <Route
+                                path="inventory/by-type"
+                                element={<InventoryPage />}
+                              />
+                              <Route
+                                path="inventory/by-location"
+                                element={<InventoryPage />}
+                              />
+                              <Route
+                                path="documents"
+                                element={<DocumentsPage />}
+                              />
+                              <Route
+                                path="documents/upload"
+                                element={<DocumentsPage />}
+                              />
+                              <Route
+                                path="documents/by-type"
+                                element={<DocumentsPage />}
+                              />
+                              <Route path="reports" element={<ReportsPage />} />
+                              <Route
+                                path="reports/complaints"
+                                element={<ReportsPage />}
+                              />
+                              <Route
+                                path="reports/status"
+                                element={<ReportsPage />}
+                              />
+                              <Route
+                                path="reports/inventory"
+                                element={<ReportsPage />}
+                              />
+                              <Route
+                                path="reports/financial"
+                                element={<ReportsPage />}
+                              />
+                              <Route
+                                path="users"
+                                element={
+                                  <ProtectedRoute requireAdmin={true}>
+                                    <UserManagementPage />
+                                  </ProtectedRoute>
+                                }
+                              />
+                              <Route
+                                path="notifications"
+                                element={<NotificationsPage />}
+                              />
+                              <Route
+                                path="settings"
+                                element={<SettingsPage />}
+                              />
+                            </Routes>
+                          </AdminLayout>
+                        </ProtectedRoute>
+                      }
+                    />
+
+                    {/* Protected Officer Routes - Officer Only */}
+                    <Route
+                      path="/officer/*"
+                      element={
+                        <ProtectedRoute requireOfficer={true}>
+                          <OfficerLayout>
+                            <Routes>
+                              <Route index element={<MyComplaintsPage />} />
+                              <Route
+                                path="complaints/:id"
+                                element={<OfficerComplaintDetailPage />}
+                              />
+                              <Route
+                                path="notifications"
+                                element={<OfficerNotificationsPage />}
+                              />
+                              <Route
+                                path="settings"
+                                element={<SettingsPage />}
+                              />
+                            </Routes>
+                          </OfficerLayout>
+                        </ProtectedRoute>
+                      }
+                    />
+
+                    {/* Public Routes */}
+                    <Route
+                      path="/*"
+                      element={
+                        <AppLayout>
                           <Routes>
-                            <Route index element={<Admin />} />
+                            <Route path="/" element={<Home />} />
                             <Route
-                              path="badaun"
-                              element={<BadaunMapTestPage />}
+                              path="/file-complaint"
+                              element={<FileComplaint />}
+                            />
+                            <Route path="/track" element={<Track />} />
+                            <Route
+                              path="/request-meeting"
+                              element={<RequestMeeting />}
+                            />
+                            <Route path="/feedback" element={<Feedback />} />
+                            <Route
+                              path="/privacy-policy"
+                              element={<PrivacyPolicy />}
                             />
                             <Route
-                              path="india-map"
-                              element={<IndiaMapPage />}
+                              path="/terms-and-conditions"
+                              element={<TermsAndConditions />}
                             />
                             <Route
-                              path="data-upload"
-                              element={<HierarchicalDataUploadPage />}
+                              path="/user-rights"
+                              element={<UserRights />}
                             />
-                            <Route path="dashboard" element={<Dashboard />} />
+                            <Route path="/contact" element={<Contact />} />
+                            <Route path="/about" element={<About />} />
                             <Route
-                              path="complaints"
-                              element={<ComplaintsPage />}
+                              path="/complaints"
+                              element={<Complaints />}
                             />
-                            <Route
-                              path="complaints/:id"
-                              element={<ComplaintDetailPage />}
-                            />
-                            <Route
-                              path="complaints/pending"
-                              element={<ComplaintsPage />}
-                            />
-                            <Route
-                              path="complaints/in-progress"
-                              element={<ComplaintsPage />}
-                            />
-                            <Route
-                              path="complaints/resolved"
-                              element={<ComplaintsPage />}
-                            />
-                            <Route
-                              path="complaints/rejected"
-                              element={<ComplaintsPage />}
-                            />
-                            <Route
-                              path="complaints/category/:category"
-                              element={<ComplaintsPage />}
-                            />
-                            <Route path="meetings" element={<MeetingsPage />} />
-                            <Route
-                              path="meetings/pending"
-                              element={<MeetingsPage />}
-                            />
-                            <Route
-                              path="meetings/approved"
-                              element={<MeetingsPage />}
-                            />
-                            <Route
-                              path="meetings/completed"
-                              element={<MeetingsPage />}
-                            />
-                            <Route
-                              path="inventory"
-                              element={<InventoryPage />}
-                            />
-                            <Route
-                              path="inventory/add"
-                              element={<InventoryFormPage />}
-                            />
-                            <Route
-                              path="inventory/:id"
-                              element={<InventoryDetailPage />}
-                            />
-                            <Route
-                              path="inventory/:id/edit"
-                              element={<InventoryFormPage />}
-                            />
-                            <Route
-                              path="inventory/by-type"
-                              element={<InventoryPage />}
-                            />
-                            <Route
-                              path="inventory/by-location"
-                              element={<InventoryPage />}
-                            />
-                            <Route
-                              path="documents"
-                              element={<DocumentsPage />}
-                            />
-                            <Route
-                              path="documents/upload"
-                              element={<DocumentsPage />}
-                            />
-                            <Route
-                              path="documents/by-type"
-                              element={<DocumentsPage />}
-                            />
-                            <Route path="reports" element={<ReportsPage />} />
-                            <Route
-                              path="reports/complaints"
-                              element={<ReportsPage />}
-                            />
-                            <Route
-                              path="reports/status"
-                              element={<ReportsPage />}
-                            />
-                            <Route
-                              path="reports/inventory"
-                              element={<ReportsPage />}
-                            />
-                            <Route
-                              path="reports/financial"
-                              element={<ReportsPage />}
-                            />
-                            <Route
-                              path="users"
-                              element={
-                                <ProtectedRoute requireAdmin={true}>
-                                  <UserManagementPage />
-                                </ProtectedRoute>
-                              }
-                            />
-                            <Route
-                              path="notifications"
-                              element={<NotificationsPage />}
-                            />
-                            <Route path="settings" element={<SettingsPage />} />
+                            <Route path="*" element={<NotFound />} />
                           </Routes>
-                        </AdminLayout>
-                      </ProtectedRoute>
-                    }
-                  />
-
-                  {/* Protected Officer Routes - Officer Only */}
-                  <Route
-                    path="/officer/*"
-                    element={
-                      <ProtectedRoute requireOfficer={true}>
-                        <OfficerLayout>
-                          <Routes>
-                            <Route index element={<MyComplaintsPage />} />
-                            <Route
-                              path="complaints/:id"
-                              element={<OfficerComplaintDetailPage />}
-                            />
-                            <Route
-                              path="notifications"
-                              element={<OfficerNotificationsPage />}
-                            />
-                            <Route path="settings" element={<SettingsPage />} />
-                          </Routes>
-                        </OfficerLayout>
-                      </ProtectedRoute>
-                    }
-                  />
-
-                  {/* Public Routes */}
-                  <Route
-                    path="/*"
-                    element={
-                      <AppLayout>
-                        <Routes>
-                          <Route path="/" element={<Home />} />
-                          <Route
-                            path="/file-complaint"
-                            element={<FileComplaint />}
-                          />
-                          <Route path="/track" element={<Track />} />
-                          <Route
-                            path="/request-meeting"
-                            element={<RequestMeeting />}
-                          />
-                          <Route path="/feedback" element={<Feedback />} />
-                          <Route
-                            path="/privacy-policy"
-                            element={<PrivacyPolicy />}
-                          />
-                          <Route
-                            path="/terms-and-conditions"
-                            element={<TermsAndConditions />}
-                          />
-                          <Route path="/user-rights" element={<UserRights />} />
-                          <Route path="/contact" element={<Contact />} />
-                          <Route path="/about" element={<About />} />
-                          <Route path="/complaints" element={<Complaints />} />
-                          <Route path="*" element={<NotFound />} />
-                        </Routes>
-                      </AppLayout>
-                    }
-                  />
-                </Routes>
-              </Router>
-              <Toaster />
-            </BadaunDistrictProvider>
-          </ModalProvider>
+                        </AppLayout>
+                      }
+                    />
+                  </Routes>
+                </Router>
+                <Toaster />
+              </BadaunDistrictProvider>
+            </ModalProvider>
+          </NotificationProvider>
         </AuthProvider>
       </I18nProvider>
     </QueryClientProvider>

@@ -15,6 +15,7 @@ import {
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Label } from "@/components/ui/label";
+import { Input } from "@/components/ui/input";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import {
   ArrowLeft,
@@ -34,6 +35,7 @@ import {
   Tag,
   Globe,
   MessageSquare,
+  MessageCircle,
   Settings,
   AlertTriangle,
   StickyNote,
@@ -42,10 +44,14 @@ import {
   Download,
   ArrowDownCircle,
   ArrowUpCircle,
+  Plus,
+  Minus,
 } from "lucide-react";
 import { complaintsService } from "@/services/complaints.service";
 import {
   Complaint,
+  ComplaintNote,
+  ComplaintDocument,
   OfficerNote,
   OfficerAttachment,
   ComplaintExtensionRequest,
@@ -62,6 +68,75 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 
+/**
+ * ImagePreview Component
+ * Loads and displays image previews using presigned URLs
+ */
+const ImagePreview: React.FC<{ fileUrl: string; alt: string }> = ({
+  fileUrl,
+  alt,
+}) => {
+  const [previewUrl, setPreviewUrl] = useState<string | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(false);
+
+  useEffect(() => {
+    let mounted = true;
+
+    const loadImage = async () => {
+      try {
+        setLoading(true);
+        setError(false);
+        const url = await uploadService.getPresignedViewUrl(fileUrl);
+        if (mounted) {
+          setPreviewUrl(url);
+        }
+      } catch (err) {
+        console.error("Error loading image preview:", err);
+        if (mounted) {
+          setError(true);
+        }
+      } finally {
+        if (mounted) {
+          setLoading(false);
+        }
+      }
+    };
+
+    loadImage();
+
+    return () => {
+      mounted = false;
+    };
+  }, [fileUrl]);
+
+  if (loading) {
+    return (
+      <div className="w-full h-full flex items-center justify-center">
+        <Loader2 className="w-8 h-8 animate-spin text-[#011a60]/50" />
+      </div>
+    );
+  }
+
+  if (error || !previewUrl) {
+    return (
+      <div className="w-full h-full flex flex-col items-center justify-center text-[#011a60]/50">
+        <ImageIcon className="w-12 h-12 mb-2" />
+        <span className="text-xs">Preview unavailable</span>
+      </div>
+    );
+  }
+
+  return (
+    <img
+      src={previewUrl}
+      alt={alt}
+      className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
+      onError={() => setError(true)}
+    />
+  );
+};
+
 const OfficerComplaintDetailPage: React.FC = () => {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
@@ -73,7 +148,9 @@ const OfficerComplaintDetailPage: React.FC = () => {
   const [extensionDays, setExtensionDays] = useState<number>(7);
   const [closingRemarks, setClosingRemarks] = useState("");
   const [actionLoading, setActionLoading] = useState(false);
+  const [adminNotes, setAdminNotes] = useState<ComplaintNote[]>([]);
   const [notes, setNotes] = useState<OfficerNote[]>([]);
+  const [adminDocuments, setAdminDocuments] = useState<ComplaintDocument[]>([]);
   const [attachments, setAttachments] = useState<OfficerAttachment[]>([]);
   const [extensionRequests, setExtensionRequests] = useState<
     ComplaintExtensionRequest[]
@@ -84,7 +161,7 @@ const OfficerComplaintDetailPage: React.FC = () => {
   const [isUploadingFile, setIsUploadingFile] = useState(false);
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const [documentType, setDocumentType] = useState<"inward" | "outward">(
-    "inward",
+    "inward"
   );
   const [filePreview, setFilePreview] = useState<string | null>(null);
 
@@ -100,7 +177,9 @@ const OfficerComplaintDetailPage: React.FC = () => {
       setLoading(true);
       const data = await complaintsService.getOfficerComplaintDetail(id);
       setComplaint(data.complaint);
+      setAdminNotes(data.adminNotes || []);
       setNotes(data.officerNotes || []);
+      setAdminDocuments(data.adminDocuments || []);
       setAttachments(data.officerAttachments || []);
       setExtensionRequests(data.extensionRequests || []);
     } catch (error: any) {
@@ -326,7 +405,7 @@ const OfficerComplaintDetailPage: React.FC = () => {
       setDocumentType("inward");
       // Reset file input
       const fileInput = document.getElementById(
-        "file-upload-input",
+        "file-upload-input"
       ) as HTMLInputElement;
       if (fileInput) fileInput.value = "";
       await loadComplaint();
@@ -348,6 +427,29 @@ const OfficerComplaintDetailPage: React.FC = () => {
 
   const isImageFile = (url: string): boolean => {
     return /\.(jpg|jpeg|png|gif|webp)$/i.test(url);
+  };
+
+  const getFileExtension = (url: string): string => {
+    const match = url.match(/\.([a-zA-Z0-9]+)(\?|$)/);
+    return match ? match[1].toLowerCase() : "";
+  };
+
+  const getFileTypeLabel = (url: string): string => {
+    const ext = getFileExtension(url);
+    const typeMap: Record<string, string> = {
+      pdf: "PDF Document",
+      doc: "Word Document",
+      docx: "Word Document",
+      xls: "Excel Document",
+      xlsx: "Excel Document",
+      txt: "Text Document",
+      jpg: "Image",
+      jpeg: "Image",
+      png: "Image",
+      gif: "Image",
+      webp: "Image",
+    };
+    return typeMap[ext] || "Document";
   };
 
   const handleViewDocument = async (fileUrl: string) => {
@@ -390,17 +492,17 @@ const OfficerComplaintDetailPage: React.FC = () => {
     }> = [];
 
     const createdAt = parseDateValue(
-      (complaint as any).created_at || complaint.createdAt,
+      (complaint as any).created_at || complaint.createdAt
     );
     const arrivalTime = parseDateValue(
       (complaint as any).arrivalTime ||
         (complaint as any).arrival_time ||
-        complaint.arrivalTime,
+        complaint.arrivalTime
     );
     const assignedTime = parseDateValue(
       (complaint as any).assignedTime ||
         (complaint as any).assigned_time ||
-        complaint.assignedTime,
+        complaint.assignedTime
     );
     const timeBoundary = complaint.timeBoundary || 7;
     const deadlineBase = arrivalTime || assignedTime || createdAt;
@@ -454,7 +556,7 @@ const OfficerComplaintDetailPage: React.FC = () => {
       const compareDate = parseDateValue(closedAt) || new Date();
       if (compareDate.getTime() > deadline.getTime()) {
         const overdueDays = Math.ceil(
-          (compareDate.getTime() - deadline.getTime()) / (1000 * 60 * 60 * 24),
+          (compareDate.getTime() - deadline.getTime()) / (1000 * 60 * 60 * 24)
         );
         events.push({
           id: "overdue",
@@ -472,7 +574,7 @@ const OfficerComplaintDetailPage: React.FC = () => {
         });
       } else if (!isComplaintClosed) {
         const remainingDays = Math.ceil(
-          (deadline.getTime() - compareDate.getTime()) / (1000 * 60 * 60 * 24),
+          (deadline.getTime() - compareDate.getTime()) / (1000 * 60 * 60 * 24)
         );
         events.push({
           id: "remaining",
@@ -585,7 +687,7 @@ const OfficerComplaintDetailPage: React.FC = () => {
 
     closingAttachments.forEach((attachment, index) => {
       const uploadedAt = parseDateValue(
-        attachment.uploadedAt || (attachment as any).uploaded_at || closedAt,
+        attachment.uploadedAt || (attachment as any).uploaded_at || closedAt
       );
       if (!uploadedAt) return;
       events.push({
@@ -878,8 +980,7 @@ const OfficerComplaintDetailPage: React.FC = () => {
                     <p className="text-foreground mt-1">
                       {(complaint as any).created_at || complaint.createdAt
                         ? new Date(
-                            (complaint as any).created_at ||
-                              complaint.createdAt,
+                            (complaint as any).created_at || complaint.createdAt
                           ).toLocaleString()
                         : "N/A"}
                     </p>
@@ -891,7 +992,7 @@ const OfficerComplaintDetailPage: React.FC = () => {
                       </Label>
                       <p className="text-foreground mt-1">
                         {new Date(
-                          (complaint as any).updated_at,
+                          (complaint as any).updated_at
                         ).toLocaleString()}
                       </p>
                     </div>
@@ -903,7 +1004,7 @@ const OfficerComplaintDetailPage: React.FC = () => {
                       </Label>
                       <p className="text-foreground mt-1">
                         {new Date(
-                          (complaint as any).arrivalTime,
+                          (complaint as any).arrivalTime
                         ).toLocaleString()}
                       </p>
                     </div>
@@ -915,7 +1016,7 @@ const OfficerComplaintDetailPage: React.FC = () => {
                       </Label>
                       <p className="text-foreground mt-1">
                         {new Date(
-                          (complaint as any).assignedTime,
+                          (complaint as any).assignedTime
                         ).toLocaleString()}
                       </p>
                     </div>
@@ -1020,38 +1121,61 @@ const OfficerComplaintDetailPage: React.FC = () => {
                 </div>
               </div>
 
-              {/* Images */}
+              {/* User-Provided Documents (Images, PDFs, etc.) */}
               {(complaint as any).images &&
                 Array.isArray((complaint as any).images) &&
                 (complaint as any).images.length > 0 && (
                   <div className="space-y-3">
                     <h3 className="text-sm font-semibold text-foreground uppercase tracking-wide border-b pb-2">
-                      Images ({(complaint as any).images.length})
+                      User-Provided Documents (
+                      {(complaint as any).images.length})
                     </h3>
-                    <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
                       {(complaint as any).images.map(
-                        (imageUrl: string, index: number) => (
-                          <a
-                            key={index}
-                            href={imageUrl}
-                            target="_blank"
-                            rel="noopener noreferrer"
-                            className="group relative aspect-square border border-[#011a60]/30 rounded-lg overflow-hidden hover:border-[#011a60]/60 transition-all"
-                          >
-                            <img
-                              src={imageUrl}
-                              alt={`Image ${index + 1}`}
-                              className="w-full h-full object-cover"
-                              onError={(e) => {
-                                (e.target as HTMLImageElement).style.display =
-                                  "none";
-                              }}
-                            />
-                            <div className="absolute inset-0 bg-black/0 group-hover:bg-black/10 transition-colors flex items-center justify-center">
-                              <ImageIcon className="w-6 h-6 text-white opacity-0 group-hover:opacity-100 transition-opacity" />
-                            </div>
-                          </a>
-                        ),
+                        (fileUrl: string, index: number) => {
+                          const isImage = isImageFile(fileUrl);
+                          const fileType = getFileTypeLabel(fileUrl);
+                          return (
+                            <button
+                              key={index}
+                              type="button"
+                              onClick={() => handleViewDocument(fileUrl)}
+                              className="group relative flex flex-col border border-[#011a60]/30 rounded-lg hover:border-[#011a60]/60 hover:shadow-md transition-all w-full text-left bg-white overflow-hidden"
+                            >
+                              {isImage ? (
+                                <div className="relative w-full h-48 bg-gradient-to-br from-gray-50 to-gray-100 flex items-center justify-center overflow-hidden">
+                                  <ImagePreview
+                                    fileUrl={fileUrl}
+                                    alt={`Image ${index + 1}`}
+                                  />
+                                  <div className="absolute top-2 right-2 p-1.5 bg-white/90 backdrop-blur-sm rounded-full shadow-sm opacity-0 group-hover:opacity-100 transition-opacity">
+                                    <ExternalLink className="w-4 h-4 text-[#011a60]" />
+                                  </div>
+                                </div>
+                              ) : (
+                                <div className="relative w-full h-48 bg-gradient-to-br from-blue-50 to-indigo-50 flex flex-col items-center justify-center">
+                                  <FileText className="w-16 h-16 text-[#011a60]/70 mb-2" />
+                                  <span className="text-xs text-[#011a60]/60 font-medium">
+                                    {fileType}
+                                  </span>
+                                  <div className="absolute top-2 right-2 p-1.5 bg-white/90 backdrop-blur-sm rounded-full shadow-sm opacity-0 group-hover:opacity-100 transition-opacity">
+                                    <ExternalLink className="w-4 h-4 text-[#011a60]" />
+                                  </div>
+                                </div>
+                              )}
+                              <div className="p-3 bg-white border-t border-[#011a60]/10">
+                                <p className="text-sm font-medium text-foreground truncate">
+                                  {isImage
+                                    ? `Image ${index + 1}`
+                                    : `Document ${index + 1}`}
+                                </p>
+                                <p className="text-xs text-muted-foreground">
+                                  {fileType}
+                                </p>
+                              </div>
+                            </button>
+                          );
+                        }
                       )}
                     </div>
                   </div>
@@ -1063,28 +1187,50 @@ const OfficerComplaintDetailPage: React.FC = () => {
                   <h3 className="text-sm font-semibold text-foreground uppercase tracking-wide border-b pb-2">
                     Documents ({complaint.documents.length})
                   </h3>
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                    {complaint.documents.map((doc, index) => (
-                      <button
-                        key={index}
-                        type="button"
-                        onClick={() => handleViewDocument(doc.fileUrl)}
-                        className="flex items-center gap-3 p-3 border border-[#011a60]/30 rounded-lg hover:border-[#011a60]/60 transition-all w-full text-left"
-                      >
-                        <FileText className="w-5 h-5 text-foreground" />
-                        <div className="flex-1 min-w-0">
-                          <p className="text-sm font-medium text-foreground truncate">
-                            {doc.fileName || `Document ${index + 1}`}
-                          </p>
-                          {doc.fileType && (
-                            <p className="text-xs text-muted-foreground">
-                              {doc.fileType}
-                            </p>
+                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                    {complaint.documents.map((doc, index) => {
+                      const isImage = isImageFile(doc.fileUrl);
+                      return (
+                        <button
+                          key={index}
+                          type="button"
+                          onClick={() => handleViewDocument(doc.fileUrl)}
+                          className="group relative flex flex-col border border-[#011a60]/30 rounded-lg hover:border-[#011a60]/60 hover:shadow-md transition-all w-full text-left bg-white overflow-hidden"
+                        >
+                          {isImage ? (
+                            <div className="relative w-full h-48 bg-gradient-to-br from-gray-50 to-gray-100 flex items-center justify-center overflow-hidden">
+                              <ImagePreview
+                                fileUrl={doc.fileUrl}
+                                alt={doc.fileName || `Document ${index + 1}`}
+                              />
+                              <div className="absolute top-2 right-2 p-1.5 bg-white/90 backdrop-blur-sm rounded-full shadow-sm opacity-0 group-hover:opacity-100 transition-opacity">
+                                <ExternalLink className="w-4 h-4 text-[#011a60]" />
+                              </div>
+                            </div>
+                          ) : (
+                            <div className="relative w-full h-48 bg-gradient-to-br from-blue-50 to-indigo-50 flex flex-col items-center justify-center">
+                              <FileText className="w-16 h-16 text-[#011a60]/70 mb-2" />
+                              <span className="text-xs text-[#011a60]/60 font-medium uppercase">
+                                {getFileTypeLabel(doc.fileUrl)}
+                              </span>
+                              <div className="absolute top-2 right-2 p-1.5 bg-white/90 backdrop-blur-sm rounded-full shadow-sm opacity-0 group-hover:opacity-100 transition-opacity">
+                                <ExternalLink className="w-4 h-4 text-[#011a60]" />
+                              </div>
+                            </div>
                           )}
-                        </div>
-                        <ExternalLink className="w-4 h-4 text-muted-foreground" />
-                      </button>
-                    ))}
+                          <div className="p-3 bg-white border-t border-[#011a60]/10">
+                            <p className="text-sm font-medium text-foreground truncate">
+                              {doc.fileName || `Document ${index + 1}`}
+                            </p>
+                            {doc.fileType && (
+                              <p className="text-xs text-muted-foreground">
+                                {doc.fileType}
+                              </p>
+                            )}
+                          </div>
+                        </button>
+                      );
+                    })}
                   </div>
                 </div>
               )}
@@ -1095,7 +1241,7 @@ const OfficerComplaintDetailPage: React.FC = () => {
                   <h3 className="text-sm font-semibold text-foreground uppercase tracking-wide border-b pb-2">
                     Closing Attachments ({closingAttachments.length})
                   </h3>
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
                     {closingAttachments.map(
                       (attachment: any, index: number) => {
                         const url = attachment.url || attachment.fileUrl;
@@ -1109,36 +1255,59 @@ const OfficerComplaintDetailPage: React.FC = () => {
                           attachment.uploadedBy || attachment.uploaded_by;
                         const uploadedAt =
                           attachment.uploadedAt || attachment.uploaded_at;
+                        const isImage = isImageFile(url);
 
                         return (
                           <button
                             key={index}
                             type="button"
                             onClick={() => handleViewDocument(url)}
-                            className="flex items-center gap-3 p-3 border border-[#011a60]/30 rounded-lg hover:border-[#011a60]/60 transition-all w-full text-left"
+                            className="group relative flex flex-col border border-emerald-200 rounded-lg hover:border-emerald-400 hover:shadow-md transition-all w-full text-left bg-white overflow-hidden"
                           >
-                            <FileText className="w-5 h-5 text-foreground" />
-                            <div className="flex-1 min-w-0">
+                            {isImage ? (
+                              <div className="relative w-full h-48 bg-gradient-to-br from-emerald-50 to-green-100 flex items-center justify-center overflow-hidden">
+                                <ImagePreview fileUrl={url} alt={fileName} />
+                                <div className="absolute top-2 right-2 p-1.5 bg-white/90 backdrop-blur-sm rounded-full shadow-sm opacity-0 group-hover:opacity-100 transition-opacity">
+                                  <ExternalLink className="w-4 h-4 text-emerald-600" />
+                                </div>
+                                <div className="absolute top-2 left-2 px-2 py-1 bg-emerald-600 text-white text-xs font-semibold rounded-md shadow-sm">
+                                  Closing Proof
+                                </div>
+                              </div>
+                            ) : (
+                              <div className="relative w-full h-48 bg-gradient-to-br from-emerald-50 to-green-100 flex flex-col items-center justify-center">
+                                <FileText className="w-16 h-16 text-emerald-600/70 mb-2" />
+                                <span className="text-xs text-emerald-600/60 font-medium uppercase">
+                                  {getFileTypeLabel(url)}
+                                </span>
+                                <div className="absolute top-2 right-2 p-1.5 bg-white/90 backdrop-blur-sm rounded-full shadow-sm opacity-0 group-hover:opacity-100 transition-opacity">
+                                  <ExternalLink className="w-4 h-4 text-emerald-600" />
+                                </div>
+                                <div className="absolute top-2 left-2 px-2 py-1 bg-emerald-600 text-white text-xs font-semibold rounded-md shadow-sm">
+                                  Closing Proof
+                                </div>
+                              </div>
+                            )}
+                            <div className="p-3 bg-white border-t border-emerald-200">
                               <p className="text-sm font-medium text-foreground truncate">
                                 {fileName}
                               </p>
                               {(fileType || uploadedBy || uploadedAt) && (
-                                <p className="text-xs text-muted-foreground">
+                                <p className="text-xs text-muted-foreground line-clamp-2">
                                   {[fileType, uploadedBy]
                                     .filter(Boolean)
                                     .join(" • ")}
                                   {uploadedAt
                                     ? ` • ${new Date(
-                                        uploadedAt,
-                                      ).toLocaleString()}`
+                                        uploadedAt
+                                      ).toLocaleDateString()}`
                                     : ""}
                                 </p>
                               )}
                             </div>
-                            <ExternalLink className="w-4 h-4 text-muted-foreground" />
                           </button>
                         );
-                      },
+                      }
                     )}
                   </div>
                 </div>
@@ -1167,7 +1336,7 @@ const OfficerComplaintDetailPage: React.FC = () => {
                             दिनांक:{" "}
                             <span className="text-[#011a60]">
                               {new Date(
-                                (complaint as any).drafted_letter.date,
+                                (complaint as any).drafted_letter.date
                               ).toLocaleDateString("hi-IN", {
                                 year: "numeric",
                                 month: "long",
@@ -1204,7 +1373,7 @@ const OfficerComplaintDetailPage: React.FC = () => {
                   {/* Attachments Section */}
                   {(complaint as any).drafted_letter.attachments &&
                   Array.isArray(
-                    (complaint as any).drafted_letter.attachments,
+                    (complaint as any).drafted_letter.attachments
                   ) &&
                   (complaint as any).drafted_letter.attachments.length > 0 ? (
                     <div className="space-y-3">
@@ -1230,7 +1399,7 @@ const OfficerComplaintDetailPage: React.FC = () => {
                               </div>
                               <ExternalLink className="w-4 h-4 text-muted-foreground" />
                             </a>
-                          ),
+                          )
                         )}
                       </div>
                     </div>
@@ -1272,7 +1441,7 @@ const OfficerComplaintDetailPage: React.FC = () => {
                             checked={noteType === "inward"}
                             onChange={(e) =>
                               setNoteType(
-                                e.target.value as "inward" | "outward",
+                                e.target.value as "inward" | "outward"
                               )
                             }
                             className="w-4 h-4 text-[#011a60]"
@@ -1290,7 +1459,7 @@ const OfficerComplaintDetailPage: React.FC = () => {
                             checked={noteType === "outward"}
                             onChange={(e) =>
                               setNoteType(
-                                e.target.value as "inward" | "outward",
+                                e.target.value as "inward" | "outward"
                               )
                             }
                             className="w-4 h-4 text-[#011a60]"
@@ -1337,26 +1506,86 @@ const OfficerComplaintDetailPage: React.FC = () => {
                   </CardContent>
                 </Card>
 
-                {/* Notes List */}
-                <Card className="border-[#011a60]/30">
-                  <CardHeader>
-                    <CardTitle className="text-lg flex items-center gap-2">
-                      <StickyNote className="w-5 h-5 text-[#011a60]" />
-                      Notes ({notes.length})
-                    </CardTitle>
+                {/* Admin Notes - Orange (read-only, same as admin panel) */}
+                <Card className="border-orange-200 shadow-sm">
+                  <CardHeader className="bg-orange-50/50 border-b border-orange-200">
+                    <div className="flex items-center gap-2 flex-wrap">
+                      <CardTitle className="text-lg flex items-center gap-2">
+                        <StickyNote className="w-5 h-5 text-orange-600" />
+                        Admin Notes ({adminNotes.length})
+                      </CardTitle>
+                      <Badge className="bg-orange-500 hover:bg-orange-600 text-white border-0">
+                        Admin
+                      </Badge>
+                    </div>
                   </CardHeader>
-                  <CardContent>
+                  <CardContent className="pt-4">
+                    {adminNotes.length === 0 ? (
+                      <p className="text-sm text-muted-foreground py-4">
+                        No admin notes yet
+                      </p>
+                    ) : (
+                      <div className="relative space-y-4">
+                        <div className="absolute left-4 top-0 bottom-0 w-0.5 bg-orange-200 rounded-full" />
+                        {adminNotes.map((note) => (
+                          <div
+                            key={note._id || (note as any).id}
+                            className="relative pl-12"
+                          >
+                            <div className="absolute left-0 top-1.5 w-8 h-8 rounded-full bg-orange-500 border-4 border-background shadow flex items-center justify-center">
+                              <MessageCircle className="w-3 h-3 text-white" />
+                            </div>
+                            <div className="bg-orange-50/50 border border-orange-200 rounded-xl p-4 shadow-sm">
+                              <p className="text-sm text-foreground whitespace-pre-wrap">
+                                {note.content || (note as any).note}
+                              </p>
+                              <div className="flex items-center justify-between mt-3 pt-3 border-t border-orange-100">
+                                <span className="text-xs text-muted-foreground flex items-center gap-1">
+                                  <Clock className="w-3 h-3" />
+                                  {note.createdAt
+                                    ? new Date(note.createdAt).toLocaleString()
+                                    : "—"}
+                                </span>
+                                {note.createdBy && (
+                                  <span className="text-xs text-muted-foreground font-medium flex items-center gap-1">
+                                    <User className="w-3 h-3" />
+                                    {note.createdBy}
+                                  </span>
+                                )}
+                              </div>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </CardContent>
+                </Card>
+
+                {/* Notes List - Officer (navy theme) */}
+                <Card className="border-[#011a60]/30 shadow-sm">
+                  <CardHeader className="bg-[#011a60]/5 border-b border-[#011a60]/20">
+                    <div className="flex items-center gap-2 flex-wrap">
+                      <CardTitle className="text-lg flex items-center gap-2">
+                        <StickyNote className="w-5 h-5 text-[#011a60]" />
+                        Officer Notes ({notes.length})
+                      </CardTitle>
+                      <Badge className="bg-[#011a60] hover:bg-[#011a60]/90 text-white border-0">
+                        Officer
+                      </Badge>
+                    </div>
+                  </CardHeader>
+                  <CardContent className="pt-4">
                     {notes.length === 0 ? (
                       <div className="text-center py-8 text-muted-foreground">
                         <StickyNote className="w-12 h-12 mx-auto mb-2 opacity-50" />
-                        <p>No notes added yet</p>
+                        <p>No officer notes added yet</p>
                       </div>
                     ) : (
                       <div className="space-y-4">
                         {notes.map((note) => (
                           <div
                             key={note._id}
-                            className="border border-[#011a60]/20 rounded-lg p-4 bg-gradient-to-r from-blue-50/50 to-indigo-50/50"
+                            className="border border-[#011a60]/30 rounded-xl p-4 bg-[#011a60]/5 shadow-sm"
                           >
                             <div className="flex items-start justify-between mb-2">
                               <div className="flex items-center gap-2">
@@ -1445,7 +1674,7 @@ const OfficerComplaintDetailPage: React.FC = () => {
                             checked={documentType === "inward"}
                             onChange={(e) =>
                               setDocumentType(
-                                e.target.value as "inward" | "outward",
+                                e.target.value as "inward" | "outward"
                               )
                             }
                             className="w-4 h-4 text-[#011a60]"
@@ -1463,7 +1692,7 @@ const OfficerComplaintDetailPage: React.FC = () => {
                             checked={documentType === "outward"}
                             onChange={(e) =>
                               setDocumentType(
-                                e.target.value as "inward" | "outward",
+                                e.target.value as "inward" | "outward"
                               )
                             }
                             className="w-4 h-4 text-[#011a60]"
@@ -1537,7 +1766,7 @@ const OfficerComplaintDetailPage: React.FC = () => {
                             setSelectedFile(null);
                             setFilePreview(null);
                             const fileInput = document.getElementById(
-                              "file-upload-input",
+                              "file-upload-input"
                             ) as HTMLInputElement;
                             if (fileInput) fileInput.value = "";
                           }}
@@ -1569,122 +1798,261 @@ const OfficerComplaintDetailPage: React.FC = () => {
                   </CardContent>
                 </Card>
 
-                {/* Documents List */}
-                <Card className="border-[#011a60]/30">
-                  <CardHeader>
-                    <CardTitle className="text-lg flex items-center gap-2">
-                      <FileText className="w-5 h-5 text-[#011a60]" />
-                      Uploaded Documents ({attachments.length})
-                    </CardTitle>
+                {/* Admin Documents - Orange (read-only, same as admin panel) */}
+                <Card className="border-orange-200 shadow-sm">
+                  <CardHeader className="bg-orange-50/50 border-b border-orange-200">
+                    <div className="flex items-center gap-2 flex-wrap">
+                      <CardTitle className="text-lg flex items-center gap-2">
+                        <FileText className="w-5 h-5 text-orange-600" />
+                        Admin Documents ({adminDocuments.length})
+                      </CardTitle>
+                      <Badge className="bg-orange-500 hover:bg-orange-600 text-white border-0">
+                        Admin
+                      </Badge>
+                    </div>
                   </CardHeader>
-                  <CardContent>
+                  <CardContent className="pt-4">
+                    {adminDocuments.length === 0 ? (
+                      <p className="text-sm text-muted-foreground py-4">
+                        No admin documents yet
+                      </p>
+                    ) : (
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        {adminDocuments.map((doc) => {
+                          const isPdf =
+                            doc.fileName?.toLowerCase().endsWith(".pdf") ||
+                            doc.fileUrl?.toLowerCase().includes(".pdf");
+                          const isImage = /\.(jpg|jpeg|png|gif|webp)$/i.test(
+                            doc.fileName || ""
+                          );
+                          return (
+                            <div
+                              key={doc._id}
+                              className="bg-orange-50/50 border border-orange-200 rounded-xl p-4 hover:shadow-md transition-all"
+                            >
+                              <div className="flex items-start gap-3">
+                                <div
+                                  className={`p-2 rounded-lg shrink-0 ${
+                                    isPdf
+                                      ? "bg-red-100"
+                                      : isImage
+                                      ? "bg-blue-100"
+                                      : "bg-gray-100"
+                                  }`}
+                                >
+                                  <FileText
+                                    className={`w-5 h-5 ${
+                                      isPdf
+                                        ? "text-red-600"
+                                        : isImage
+                                        ? "text-blue-600"
+                                        : "text-gray-600"
+                                    }`}
+                                  />
+                                </div>
+                                <div className="flex-1 min-w-0">
+                                  <p className="text-sm font-semibold truncate">
+                                    {doc.fileName}
+                                  </p>
+                                  <p className="text-xs text-muted-foreground mt-1 flex items-center gap-1">
+                                    <Clock className="w-3 h-3" />
+                                    {doc.createdAt
+                                      ? new Date(doc.createdAt).toLocaleString()
+                                      : "—"}
+                                  </p>
+                                  <div className="flex items-center gap-2 mt-2">
+                                    <Badge
+                                      variant="outline"
+                                      className={`text-xs ${
+                                        doc.fileType === "inward"
+                                          ? "bg-blue-50 text-blue-700 border-blue-200"
+                                          : "bg-green-50 text-green-700 border-green-200"
+                                      }`}
+                                    >
+                                      {doc.fileType}
+                                    </Badge>
+                                    <Button
+                                      variant="ghost"
+                                      size="sm"
+                                      onClick={() =>
+                                        handleViewDocument(doc.fileUrl)
+                                      }
+                                      className="h-7 px-2 text-xs"
+                                    >
+                                      <ExternalLink className="w-3 h-3 mr-1" />
+                                      View
+                                    </Button>
+                                  </div>
+                                </div>
+                              </div>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    )}
+                  </CardContent>
+                </Card>
+
+                {/* Documents List - Officer (navy theme) */}
+                <Card className="border-[#011a60]/30 shadow-sm">
+                  <CardHeader className="bg-[#011a60]/5 border-b border-[#011a60]/20">
+                    <div className="flex items-center gap-2 flex-wrap">
+                      <CardTitle className="text-lg flex items-center gap-2">
+                        <FileText className="w-5 h-5 text-[#011a60]" />
+                        Officer Uploaded Documents ({attachments.length})
+                      </CardTitle>
+                      <Badge className="bg-[#011a60] hover:bg-[#011a60]/90 text-white border-0">
+                        Officer
+                      </Badge>
+                    </div>
+                  </CardHeader>
+                  <CardContent className="pt-4">
                     {attachments.length === 0 ? (
                       <div className="text-center py-8 text-muted-foreground">
                         <FileText className="w-12 h-12 mx-auto mb-2 opacity-50" />
                         <p>No documents uploaded yet</p>
                       </div>
                     ) : (
-                      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                        {attachments.map((doc) => (
-                          <div
-                            key={doc._id}
-                            className="border border-[#011a60]/20 rounded-lg p-4 hover:border-[#011a60]/40 transition-colors bg-white"
-                          >
-                            <div className="flex items-start justify-between mb-3">
-                              <div className="flex items-center gap-2 flex-1 min-w-0">
-                                {isImageFile(doc.fileUrl) ? (
-                                  <ImageIcon className="w-5 h-5 text-blue-600 flex-shrink-0" />
-                                ) : (
-                                  <FileText className="w-5 h-5 text-[#011a60] flex-shrink-0" />
-                                )}
-                                <div className="flex-1 min-w-0">
-                                  <p className="text-sm font-medium text-foreground truncate">
-                                    {doc.fileName}
-                                  </p>
-                                  <p className="text-xs text-muted-foreground">
-                                    {formatFileSize(doc.fileSize)}
-                                  </p>
+                      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                        {attachments.map((doc) => {
+                          const isImage = isImageFile(doc.fileUrl);
+                          const isInward = doc.attachmentType === "inward";
+                          return (
+                            <div
+                              key={doc._id}
+                              className="group relative flex flex-col border border-[#011a60]/30 rounded-xl hover:border-[#011a60]/50 hover:shadow-md transition-all bg-[#011a60]/5 overflow-hidden"
+                            >
+                              {/* Image/Document Preview */}
+                              {isImage ? (
+                                <div className="relative w-full h-48 bg-gradient-to-br from-gray-50 to-gray-100 flex items-center justify-center overflow-hidden">
+                                  <ImagePreview
+                                    fileUrl={doc.fileUrl}
+                                    alt={doc.fileName}
+                                  />
+                                  <div className="absolute top-2 left-2 z-10">
+                                    <Badge
+                                      variant="outline"
+                                      className={
+                                        isInward
+                                          ? "border-blue-500 text-blue-700 bg-blue-50/95 backdrop-blur-sm"
+                                          : "border-green-500 text-green-700 bg-green-50/95 backdrop-blur-sm"
+                                      }
+                                    >
+                                      {isInward ? (
+                                        <>
+                                          <ArrowDownCircle className="w-3 h-3 mr-1" />
+                                          Inward
+                                        </>
+                                      ) : (
+                                        <>
+                                          <ArrowUpCircle className="w-3 h-3 mr-1" />
+                                          Outward
+                                        </>
+                                      )}
+                                    </Badge>
+                                  </div>
+                                </div>
+                              ) : (
+                                <div
+                                  className={`relative w-full h-48 bg-gradient-to-br ${
+                                    isInward
+                                      ? "from-blue-50 to-indigo-50"
+                                      : "from-green-50 to-emerald-50"
+                                  } flex flex-col items-center justify-center`}
+                                >
+                                  <FileText
+                                    className={`w-16 h-16 mb-2 ${
+                                      isInward
+                                        ? "text-blue-600/70"
+                                        : "text-green-600/70"
+                                    }`}
+                                  />
+                                  <span
+                                    className={`text-xs font-medium uppercase ${
+                                      isInward
+                                        ? "text-blue-600/60"
+                                        : "text-green-600/60"
+                                    }`}
+                                  >
+                                    {getFileTypeLabel(doc.fileUrl)}
+                                  </span>
+                                  <div className="absolute top-2 left-2">
+                                    <Badge
+                                      variant="outline"
+                                      className={
+                                        isInward
+                                          ? "border-blue-500 text-blue-700 bg-blue-50/95 backdrop-blur-sm"
+                                          : "border-green-500 text-green-700 bg-green-50/95 backdrop-blur-sm"
+                                      }
+                                    >
+                                      {isInward ? (
+                                        <>
+                                          <ArrowDownCircle className="w-3 h-3 mr-1" />
+                                          Inward
+                                        </>
+                                      ) : (
+                                        <>
+                                          <ArrowUpCircle className="w-3 h-3 mr-1" />
+                                          Outward
+                                        </>
+                                      )}
+                                    </Badge>
+                                  </div>
+                                </div>
+                              )}
+
+                              {/* Document Info */}
+                              <div className="p-3 bg-white border-t border-[#011a60]/10">
+                                <p className="text-sm font-medium text-foreground truncate mb-1">
+                                  {doc.fileName}
+                                </p>
+                                <p className="text-xs text-muted-foreground mb-2">
+                                  {formatFileSize(doc.fileSize)} •{" "}
+                                  {new Date(doc.createdAt).toLocaleDateString()}
+                                </p>
+                                <div className="flex items-center gap-2 pt-2 border-t border-[#011a60]/5">
+                                  <Button
+                                    variant="outline"
+                                    size="sm"
+                                    className="flex-1 h-8 text-xs"
+                                    onClick={() =>
+                                      handleViewDocument(doc.fileUrl)
+                                    }
+                                  >
+                                    <ExternalLink className="w-3 h-3 mr-1" />
+                                    View
+                                  </Button>
+                                  <Button
+                                    variant="outline"
+                                    size="sm"
+                                    className="flex-1 h-8 text-xs"
+                                    onClick={async () => {
+                                      try {
+                                        const viewUrl =
+                                          await uploadService.getPresignedViewUrl(
+                                            doc.fileUrl
+                                          );
+                                        const a = document.createElement("a");
+                                        a.href = viewUrl;
+                                        a.download = doc.fileName || "download";
+                                        a.target = "_blank";
+                                        a.rel = "noopener noreferrer";
+                                        a.click();
+                                      } catch (e: any) {
+                                        toast.error(
+                                          e.message || "Failed to download"
+                                        );
+                                      }
+                                    }}
+                                  >
+                                    <Download className="w-3 h-3 mr-1" />
+                                    Download
+                                  </Button>
                                 </div>
                               </div>
                             </div>
-                            <div className="flex items-center justify-between">
-                              <Badge
-                                variant="outline"
-                                className={
-                                  doc.attachmentType === "inward"
-                                    ? "border-blue-500 text-blue-700 bg-blue-50"
-                                    : "border-green-500 text-green-700 bg-green-50"
-                                }
-                              >
-                                {doc.attachmentType === "inward" ? (
-                                  <>
-                                    <ArrowDownCircle className="w-3 h-3 mr-1" />
-                                    Inward
-                                  </>
-                                ) : (
-                                  <>
-                                    <ArrowUpCircle className="w-3 h-3 mr-1" />
-                                    Outward
-                                  </>
-                                )}
-                              </Badge>
-                              <div className="flex items-center gap-2">
-                                <Button
-                                  variant="ghost"
-                                  size="icon"
-                                  className="h-8 w-8 p-0 hover:bg-[#011a60]/10"
-                                  title="View"
-                                  onClick={() =>
-                                    handleViewDocument(doc.fileUrl)
-                                  }
-                                >
-                                  <ExternalLink className="w-4 h-4 text-[#011a60]" />
-                                </Button>
-                                <Button
-                                  variant="ghost"
-                                  size="icon"
-                                  className="h-8 w-8 p-0 hover:bg-[#011a60]/10"
-                                  title="Download"
-                                  onClick={async () => {
-                                    try {
-                                      const viewUrl =
-                                        await uploadService.getPresignedViewUrl(
-                                          doc.fileUrl,
-                                        );
-                                      const a = document.createElement("a");
-                                      a.href = viewUrl;
-                                      a.download = doc.fileName || "download";
-                                      a.target = "_blank";
-                                      a.rel = "noopener noreferrer";
-                                      a.click();
-                                    } catch (e: any) {
-                                      toast.error(
-                                        e.message || "Failed to download",
-                                      );
-                                    }
-                                  }}
-                                >
-                                  <Download className="w-4 h-4 text-[#011a60]" />
-                                </Button>
-                              </div>
-                            </div>
-                            {isImageFile(doc.fileUrl) && (
-                              <div
-                                className="mt-3 rounded-lg overflow-hidden border border-[#011a60]/20 cursor-pointer flex items-center justify-center h-32 bg-[#011a60]/5"
-                                onClick={() => handleViewDocument(doc.fileUrl)}
-                                title="Click to view image"
-                              >
-                                <span className="text-xs text-muted-foreground">
-                                  Click to view image
-                                </span>
-                              </div>
-                            )}
-                            <p className="text-xs text-muted-foreground mt-2">
-                              Uploaded{" "}
-                              {new Date(doc.createdAt).toLocaleString()}
-                            </p>
-                          </div>
-                        ))}
+                          );
+                        })}
                       </div>
                     )}
                   </CardContent>
@@ -1777,7 +2145,7 @@ const OfficerComplaintDetailPage: React.FC = () => {
                           .sort(
                             (a, b) =>
                               new Date(b.createdAt).getTime() -
-                              new Date(a.createdAt).getTime(),
+                              new Date(a.createdAt).getTime()
                           )
                           .map((request) => (
                             <div
@@ -1791,15 +2159,15 @@ const OfficerComplaintDetailPage: React.FC = () => {
                                       request.status === "pending"
                                         ? "bg-yellow-500 text-white"
                                         : request.status === "approved"
-                                          ? "bg-green-500 text-white"
-                                          : "bg-red-500 text-white"
+                                        ? "bg-green-500 text-white"
+                                        : "bg-red-500 text-white"
                                     }
                                   >
                                     {request.status === "pending"
                                       ? "Pending"
                                       : request.status === "approved"
-                                        ? "Approved"
-                                        : "Rejected"}
+                                      ? "Approved"
+                                      : "Rejected"}
                                   </Badge>
                                   <span className="text-sm text-muted-foreground">
                                     {request.daysRequested} day
@@ -1832,7 +2200,7 @@ const OfficerComplaintDetailPage: React.FC = () => {
                                         : "Rejected"}{" "}
                                       {request.decidedAt &&
                                         `on ${new Date(
-                                          request.decidedAt,
+                                          request.decidedAt
                                         ).toLocaleDateString()}`}
                                     </span>
                                     {request.notes && (
@@ -1960,61 +2328,163 @@ const OfficerComplaintDetailPage: React.FC = () => {
 
       {/* Extension Request Dialog */}
       <Dialog open={showExtensionDialog} onOpenChange={setShowExtensionDialog}>
-        <DialogContent className="sm:max-w-[500px]">
+        <DialogContent className="sm:max-w-[550px]">
           <DialogHeader>
-            <DialogTitle className="flex items-center gap-2">
-              <Clock className="w-5 h-5 text-orange-600" />
+            <DialogTitle className="flex items-center gap-2 text-xl">
+              <div className="p-2 bg-orange-100 rounded-lg">
+                <Clock className="w-5 h-5 text-orange-600" />
+              </div>
               Request Term Extension
             </DialogTitle>
-            <DialogDescription>
+            <DialogDescription className="text-base">
               Request more time to act on this complaint. This will be sent to
               the admin for approval.
             </DialogDescription>
           </DialogHeader>
-          <div className="space-y-4 py-4">
-            <div className="space-y-2">
-              <Label htmlFor="extension-days">
+          <div className="space-y-6 py-4">
+            {/* Extension Days Input */}
+            <div className="space-y-3">
+              <Label htmlFor="extension-days" className="text-sm font-semibold">
                 Extension (days) <span className="text-red-500">*</span>
               </Label>
-              <input
-                id="extension-days"
-                type="number"
-                min={1}
-                max={365}
-                value={extensionDays}
-                onChange={(e) => setExtensionDays(Number(e.target.value))}
-                className="w-full rounded-md border px-3 py-2 text-sm"
-              />
+              <div className="flex items-center gap-3">
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="icon"
+                  className="h-11 w-11 rounded-lg border-2 hover:border-orange-400 hover:bg-orange-50"
+                  onClick={() =>
+                    setExtensionDays((prev) => Math.max(1, prev - 1))
+                  }
+                  disabled={extensionDays <= 1}
+                >
+                  <Minus className="h-4 w-4" />
+                </Button>
+                <div className="flex-1 relative">
+                  <Input
+                    id="extension-days"
+                    type="number"
+                    min={1}
+                    max={365}
+                    value={extensionDays}
+                    onChange={(e) => {
+                      const value = Number(e.target.value);
+                      if (value >= 1 && value <= 365) {
+                        setExtensionDays(value);
+                      }
+                    }}
+                    className="text-center text-lg font-semibold h-11 border-2 focus-visible:border-orange-400 focus-visible:ring-orange-400"
+                  />
+                  <span className="absolute right-3 top-1/2 -translate-y-1/2 text-sm text-muted-foreground font-normal">
+                    days
+                  </span>
+                </div>
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="icon"
+                  className="h-11 w-11 rounded-lg border-2 hover:border-orange-400 hover:bg-orange-50"
+                  onClick={() =>
+                    setExtensionDays((prev) => Math.min(365, prev + 1))
+                  }
+                  disabled={extensionDays >= 365}
+                >
+                  <Plus className="h-4 w-4" />
+                </Button>
+              </div>
+              <div className="flex items-center justify-between text-xs text-muted-foreground px-1">
+                <span>Minimum: 1 day</span>
+                <span>Maximum: 365 days</span>
+              </div>
+              {/* Quick Selection Buttons */}
+              <div className="flex gap-2 flex-wrap">
+                <span className="text-xs text-muted-foreground self-center">
+                  Quick select:
+                </span>
+                {[3, 7, 14, 30].map((days) => (
+                  <Button
+                    key={days}
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    onClick={() => setExtensionDays(days)}
+                    className={`text-xs ${
+                      extensionDays === days
+                        ? "bg-orange-100 border-orange-400 text-orange-700 hover:bg-orange-100"
+                        : ""
+                    }`}
+                  >
+                    {days} days
+                  </Button>
+                ))}
+              </div>
             </div>
-            <div className="space-y-2">
-              <Label htmlFor="extension-reason">
+
+            {/* Reason for Extension */}
+            <div className="space-y-3">
+              <Label
+                htmlFor="extension-reason"
+                className="text-sm font-semibold"
+              >
                 Reason for Extension <span className="text-red-500">*</span>
               </Label>
               <Textarea
                 id="extension-reason"
-                placeholder="Please explain why you need additional time to resolve this complaint..."
+                placeholder="Please provide a detailed explanation for why you need additional time to resolve this complaint. Include specific reasons such as pending documentation, coordination with other departments, or complexity of the case..."
                 value={extensionReason}
                 onChange={(e) => setExtensionReason(e.target.value)}
                 rows={5}
-                className="resize-none"
+                className="resize-none border-2 focus-visible:border-orange-400 focus-visible:ring-orange-400"
                 maxLength={1000}
               />
-              <p className="text-xs text-muted-foreground text-right">
-                {extensionReason.length}/1000 characters
-              </p>
-            </div>
-            <div className="bg-blue-50 border border-blue-200 rounded-lg p-3">
-              <div className="flex items-start gap-2">
-                <AlertCircle className="w-4 h-4 text-blue-600 mt-0.5 flex-shrink-0" />
-                <p className="text-xs text-blue-800">
-                  Your extension request will be reviewed. The time boundary for
-                  this complaint is{" "}
-                  <strong>{complaint?.timeBoundary || 7} days</strong>.
+              <div className="flex items-center justify-between">
+                <p className="text-xs text-muted-foreground">
+                  {extensionReason.length === 0 ? (
+                    <span className="text-amber-600">⚠ Reason is required</span>
+                  ) : extensionReason.length < 50 ? (
+                    <span className="text-amber-600">
+                      Please provide more detail ({50 - extensionReason.length}{" "}
+                      more characters recommended)
+                    </span>
+                  ) : (
+                    <span className="text-green-600">
+                      ✓ Good detail provided
+                    </span>
+                  )}
+                </p>
+                <p className="text-xs text-muted-foreground">
+                  {extensionReason.length}/1000
                 </p>
               </div>
             </div>
+
+            {/* Info Banner */}
+            <div className="bg-gradient-to-r from-blue-50 to-indigo-50 border-2 border-blue-200 rounded-lg p-4">
+              <div className="flex items-start gap-3">
+                <div className="p-1.5 bg-blue-100 rounded-lg flex-shrink-0">
+                  <AlertCircle className="w-4 h-4 text-blue-600" />
+                </div>
+                <div className="flex-1 space-y-1">
+                  <p className="text-sm font-medium text-blue-900">
+                    Extension Request Information
+                  </p>
+                  <p className="text-xs text-blue-800 leading-relaxed">
+                    Your extension request will be reviewed by an administrator.
+                    The current time boundary for this complaint is{" "}
+                    <strong className="font-semibold">
+                      {complaint?.timeBoundary || 7} days
+                    </strong>
+                    . You are requesting an additional{" "}
+                    <strong className="font-semibold">
+                      {extensionDays} {extensionDays === 1 ? "day" : "days"}
+                    </strong>
+                    .
+                  </p>
+                </div>
+              </div>
+            </div>
           </div>
-          <DialogFooter>
+          <DialogFooter className="gap-2">
             <Button
               variant="outline"
               onClick={() => {
@@ -2023,6 +2493,7 @@ const OfficerComplaintDetailPage: React.FC = () => {
                 setExtensionDays(7);
               }}
               disabled={actionLoading}
+              className="min-w-[100px]"
             >
               Cancel
             </Button>
@@ -2034,7 +2505,7 @@ const OfficerComplaintDetailPage: React.FC = () => {
                 !extensionDays ||
                 extensionDays < 1
               }
-              className="bg-orange-600 hover:bg-orange-700"
+              className="bg-orange-600 hover:bg-orange-700 min-w-[140px]"
             >
               {actionLoading ? (
                 <>

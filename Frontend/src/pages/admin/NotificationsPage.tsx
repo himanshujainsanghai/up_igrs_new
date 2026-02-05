@@ -14,6 +14,7 @@ import {
 } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
+import { useNotificationContext } from "@/contexts/NotificationContext";
 import {
   notificationsService,
   type NotificationItem,
@@ -39,6 +40,8 @@ const EVENT_TYPE_LABELS: Record<string, string> = {
 
 const NotificationsPage: React.FC = () => {
   const navigate = useNavigate();
+  const { newNotificationVersion, refreshUnreadCount } =
+    useNotificationContext();
   const [notifications, setNotifications] = useState<NotificationItem[]>([]);
   const [total, setTotal] = useState(0);
   const [loading, setLoading] = useState(true);
@@ -68,6 +71,10 @@ const NotificationsPage: React.FC = () => {
     fetchNotifications();
   }, [fetchNotifications]);
 
+  useEffect(() => {
+    if (newNotificationVersion > 0) fetchNotifications();
+  }, [newNotificationVersion, fetchNotifications]);
+
   const handleMarkAsRead = async (id: string) => {
     setMarkingId(id);
     try {
@@ -77,6 +84,7 @@ const NotificationsPage: React.FC = () => {
           n.id === id ? { ...n, read_at: new Date().toISOString() } : n
         )
       );
+      refreshUnreadCount();
     } catch (e) {
       console.error("Failed to mark as read", e);
     } finally {
@@ -88,6 +96,7 @@ const NotificationsPage: React.FC = () => {
     try {
       await notificationsService.markAllAsRead();
       fetchNotifications();
+      refreshUnreadCount();
     } catch (e) {
       console.error("Failed to mark all as read", e);
     }
